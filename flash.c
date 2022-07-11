@@ -19,7 +19,7 @@ Hao Luo         2011/01/01        2.0           Change               luohao13568
 #include "flash.h"
 
 /**********************
- *这个函数只作用于写请求
+ *이 기능은 쓰기 요청에서만 작동합니다.
  ***********************/
 Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
 {
@@ -32,12 +32,12 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
     die_num=ssd->parameter->die_chip;
     plane_num=ssd->parameter->plane_die;
 
-
-    if (ssd->parameter->allocation_scheme==0)                                          /*动态分配的情况*/
+    //#정적할당: 정해진 규칙에 따라 채널, 칩, 다이, plane 결정. 동적할당: 정해진 규칙을 따르지 않고 동적으로 위치 결정 
+    if (ssd->parameter->allocation_scheme==0)                                          /*동적 할당의 경우*/
     {
         /******************************************************************
-         * 在动态分配中，因为页的更新操作使用不了copyback操作，
-         *需要产生一个读请求，并且只有这个读请求完成后才能进行这个页的写操作
+         *동적 할당에서는 페이지 업데이트 작업이 카피백 작업을 사용할 수 없기 때문에,
+         *읽기 요청이 생성되어야 하며, 읽기 요청이 완료된 후에만 페이지 쓰기가 가능합니다.
          *******************************************************************/
         if (ssd->dram->map->map_entry[sub_req->lpn].state!=0)    
         {
@@ -71,7 +71,7 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
                 update->ppn = ssd->dram->map->map_entry[sub_req->lpn].pn;
                 update->operation = READ;
 
-                if (ssd->channel_head[location->channel].subs_r_tail!=NULL)            /*产生新的读请求，并且挂到channel的subs_r_tail队列尾*/
+                if (ssd->channel_head[location->channel].subs_r_tail!=NULL)            /*새 읽기 요청을 생성하고 채널의 subs_r_tail 대기열 끝에서 정지*/
                 {
                     ssd->channel_head[location->channel].subs_r_tail->next_node=update;
                     ssd->channel_head[location->channel].subs_r_tail=update;
@@ -84,9 +84,9 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
             }
         }
         /***************************************
-         *一下是动态分配的几种情况
-         *0：全动态分配
-         *1：表示channel定package，die，plane动态
+         *다음은 동적 할당의 몇 가지 경우입니다.
+         *0: 전체 동적 할당
+         *1: 채널이 패키지, 다이 및 평면 역학을 결정함을 나타냅니다.
          ****************************************/
         switch(ssd->parameter->dynamic_allocation)
         {
@@ -99,12 +99,12 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
                     sub_req->location->block=-1;
                     sub_req->location->page=-1;
 
-                    if (ssd->subs_w_tail!=NULL)
+                    if (ssd->subs_w_tail!=NULL) //write에 관한 sub request가 존재하는 경우 현재의 sub_request를 tail노드로 설정해줌
                     {
                         ssd->subs_w_tail->next_node=sub_req;
                         ssd->subs_w_tail=sub_req;
                     } 
-                    else
+                    else //write sub request가 존재하지 않으므로 현재 sub_req가 head이자 tail
                     {
                         ssd->subs_w_tail=sub_req;
                         ssd->subs_w_head=sub_req;
@@ -145,10 +145,10 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
         }
 
     }
-    else                                                                          
+    else//동적할당이 아닌 경우                                                                 
     {   /***************************************************************************
-         *是静态分配方式，所以可以将这个子请求的最终channel，chip，die，plane全部得出
-         *总共有0,1,2,3,4,5,这六种静态分配方式。
+         *이것은 정적 할당 방식이므로 이 하위 요청의 최종 채널, 칩, 다이 및 평면을 모두 얻을 수 있습니다.
+         *정적 할당 방식은 총 0, 1, 2, 3, 4, 5, 6가지가 있습니다.
          ****************************************************************************/
         switch (ssd->parameter->static_allocation)
         {
@@ -207,7 +207,7 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
 
         }
         if (ssd->dram->map->map_entry[sub_req->lpn].state!=0)
-        {                                                                              /*这个写回的子请求的逻辑页不可以覆盖之前被写回的数据 需要产生读请求*/ 
+        {   /*다시 쓴 하위 요청의 논리 페이지는 이전에 다시 쓴 데이터를 덮어쓸 수 없습니다. 읽기 요청을 생성해야 합니다.*/ 
             if ((sub_req->state&ssd->dram->map->map_entry[sub_req->lpn].state)!=ssd->dram->map->map_entry[sub_req->lpn].state)  
             {
                 ssd->read_count++;
@@ -277,11 +277,11 @@ Status allocate_location(struct ssd_info * ssd ,struct sub_request *sub_req)
 
 
 /*******************************************************************************
- *insert2buffer这个函数是专门为写请求分配子请求服务的在buffer_management中被调用。
+ *insert2buffer 이 함수는 쓰기 요청에 대한 하위 요청 서비스를 위해 특별히 buffer_management에서 호출됩니다.
  ********************************************************************************/
 struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,struct sub_request *sub,struct request *req)      
 {
-    int write_back_count,flag=0;                                                             /*flag表示为写入新数据腾空间是否完成，0表示需要进一步腾，1表示已经腾空*/
+    int write_back_count,flag=0;     /*플래그는 새 데이터 쓰기를 위한 공간이 완료되었는지 여부를 나타내고, 0은 추가 공간이 필요함을 나타내고, 1은 비어 있음을 나타냅니다.*/
     unsigned int i,lsn,hit_flag,add_flag,sector_count,active_region_flag=0,free_sector=0;
     struct buffer_group *buffer_node=NULL,*pt,*new_node=NULL,key;
     struct sub_request *sub_req=NULL,*update=NULL;
@@ -293,9 +293,9 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
     printf("enter insert2buffer,  current time:%lld, lpn:%d, state:%d,\n",ssd->current_time,lpn,state);
 #endif
 
-    sector_count=size(state);                                                                /*需要写到buffer的sector个数*/
+    sector_count=size(state);                                                                /*버퍼에 기록해야 하는 섹터 수*/
     key.group=lpn;
-    buffer_node= (struct buffer_group*)avlTreeFind(ssd->dram->buffer, (TREE_NODE *)&key);    /*在平衡二叉树中寻找buffer node*/ 
+    buffer_node= (struct buffer_group*)avlTreeFind(ssd->dram->buffer, (TREE_NODE *)&key);    /*균형 이진 트리에서 버퍼 노드 찾기*/ 
 
     /************************************************************************************************
      *没有命中。
@@ -303,6 +303,12 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
      *首先即要计算出free sector（表示还有多少可以直接写的buffer节点）。
      *如果free_sector>=sector_count，即有多余的空间够lpn子请求写，不需要产生写回请求
      *否则，没有多余的空间供lpn子请求写，这时需要释放一部分空间，产生写回请求。就要creat_sub_request()
+
+     *안타가 없습니다. (명중이 없다?)
+     *첫 번째 단계는 이 lpn의 얼마나 많은 서브페이지를 버퍼에 기록해야 하는지에 따라 다시 기록된 lsn을 제거하고 lpn을 위한 공간을 만드는 것입니다.
+     * 우선 여유 섹터(직접 쓸 수 있는 버퍼 노드의 수를 나타냄)를 계산해야 합니다.
+     *free_sector>=sector_count이면 lpn 하위 요청이 쓸 수 있는 충분한 공간이 있으므로 다시 쓰기 요청을 생성할 필요가 없습니다.
+     *그렇지 않으면 lpn 하위 요청이 쓸 추가 공간이 없고 다시 쓰기 요청을 생성하기 위해 공간의 일부를 해제해야 합니다. 그냥 creat_sub_request()
      *************************************************************************************************/
     if(buffer_node==NULL)
     {
@@ -313,7 +319,7 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
         }
         if(flag==0)     
         {
-            write_back_count=sector_count-free_sector;
+            write_back_count=sector_count-free_sector; //추가로 더 필요한 공간
             ssd->dram->buffer->write_miss_hit=ssd->dram->buffer->write_miss_hit+write_back_count;
             while(write_back_count>0)
             {
@@ -328,6 +334,10 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                  *req为空，表示这个函数是在process函数中处理一对多映射关系的读的时候，需要将这个读出
                  *的数据加到buffer中，这可能产生实时的写回操作，需要将这个实时的写回操作的子请求挂在
                  *这个读请求的总请求上
+
+                 *req는 비어 있지 않으며, 이는 insert2buffer 함수가 buffer_management에서 호출되고 요청이 전달되었음을 나타냅니다.
+                 *req는 비어 있으며, 프로세스 함수에서 일대다 매핑 관계 읽기를 처리할 때 이 함수가 이를 읽어야 함을 나타냅니다.
+                 *실시간 쓰기 되돌림 작업을 생성할 수 있는 버퍼에 데이터가 추가되고 이 실시간 쓰기 되돌림 작업의 하위 요청이 이 읽기 요청의 전체 요청에 중단되어야 합니다.
                  ***********************************************************************************/
                 if(req!=NULL)                                             
                 {
@@ -339,12 +349,12 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                 }
 
                 /*********************************************************************
-                 *写请求插入到了平衡二叉树，这时就要修改dram的buffer_sector_count；
-                 *维持平衡二叉树调用avlTreeDel()和AVL_TREENODE_FREE()函数；维持LRU算法；
+                 *쓰기 요청이 균형 이진 트리에 삽입된 다음 dram의 buffer_sector_count를 수정해야 합니다.
+                 * 균형 이진 트리를 유지하려면 avlTreeDel() 및 AVL_TREENODE_FREE() 함수를 호출하고 LRU 알고리즘을 유지합니다.
                  **********************************************************************/
                 ssd->dram->buffer->buffer_sector_count=ssd->dram->buffer->buffer_sector_count-sub_req->size;
-                pt = ssd->dram->buffer->buffer_tail;
-                avlTreeDel(ssd->dram->buffer, (TREE_NODE *) pt);
+                pt = ssd->dram->buffer->buffer_tail; //dram buffer의 tail node를 pt에 할당
+                avlTreeDel(ssd->dram->buffer, (TREE_NODE *) pt); //pt를 dram의 avlTree에서 제거
                 if(ssd->dram->buffer->buffer_head->LRU_link_next == NULL){
                     ssd->dram->buffer->buffer_head = NULL;
                     ssd->dram->buffer->buffer_tail = NULL;
@@ -357,12 +367,12 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                 AVL_TREENODE_FREE(ssd->dram->buffer, (TREE_NODE *) pt);
                 pt = NULL;
 
-                write_back_count=write_back_count-sub_req->size;                            /*因为产生了实时写回操作，需要将主动写回操作区域增加*/
+                write_back_count=write_back_count-sub_req->size;                            /*실시간 후기입 작업으로 인해 활성 후기입 작업 영역을 늘려야 합니다.*/
             }
         }
 
         /******************************************************************************
-         *生成一个buffer node，根据这个页的情况分别赋值个各个成员，添加到队首和二叉树中
+         * 버퍼 노드를 생성하고, 이 페이지의 상황에 따라 각 멤버를 할당하고, 팀 헤드 및 바이너리 트리에 추가
          *******************************************************************************/
         new_node=NULL;
         new_node=(struct buffer_group *)malloc(sizeof(struct buffer_group));
@@ -385,17 +395,17 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
         ssd->dram->buffer->buffer_sector_count += sector_count;
     }
     /****************************************************************************************
-     *在buffer中命中的情况
-     *算然命中了，但是命中的只是lpn，有可能新来的写请求，只是需要写lpn这一page的某几个sub_page
-     *这时有需要进一步的判断
+     *버퍼에 부딪힌 경우
+     *적중했지만 LPN만 적중되었습니다. 새 쓰기 요청은 LPN 페이지의 일부 하위 페이지만 쓰기만 하면 될 수 있습니다.
+     *이때 추가적인 판단이 필요하다
      *****************************************************************************************/
     else
     {
         for(i=0;i<ssd->parameter->subpage_page;i++)
         {
             /*************************************************************
-             *判断state第i位是不是1
-             *并且判断第i个sector是否存在buffer中，1表示存在，0表示不存在。
+             * 상태의 i번째 비트가 1인지 확인
+             *그리고 i번째 섹터가 버퍼에 존재하는지 판단하고, 1은 존재함, 0은 존재하지 않음을 의미합니다.
              **************************************************************/
             if((state>>i)%2!=0)                                                         
             {
@@ -403,9 +413,9 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                 hit_flag=0;
                 hit_flag=(buffer_node->stored)&(0x00000001<<i);
 
-                if(hit_flag!=0)				                                          /*命中了，需要将该节点移到buffer的队首，并且将命中的lsn进行标记*/
+                if(hit_flag!=0)				                                          /*히트, 버퍼의 헤드로 노드를 이동하고 히트 lsn을 표시해야 합니다.*/
                 {	
-                    active_region_flag=1;                                             /*用来记录在这个buffer node中的lsn是否被命中，用于后面对阈值的判定*/
+                    active_region_flag=1;                                             /*이 버퍼 노드의 lsn이 적중되었는지 여부를 기록하는 데 사용되며, 이는 나중에 임계값을 결정하는 데 사용됩니다.*/
 
                     if(req!=NULL)
                     {
@@ -427,7 +437,7 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                             ssd->dram->buffer->buffer_head=buffer_node;					
                         }					
                         ssd->dram->buffer->write_hit++;
-                        req->complete_lsn_count++;                                        /*关键 当在buffer中命中时 就用req->complete_lsn_count++表示往buffer中写了数据。*/					
+                        req->complete_lsn_count++;                                        /*키 버퍼에 도달할 때 req->complete_lsn_count++를 사용하여 데이터가 버퍼에 기록되었음을 나타냅니다.*/					
                     }
                     else
                     {
@@ -436,19 +446,19 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                 else                 			
                 {
                     /************************************************************************************************************
-                     *该lsn没有命中，但是节点在buffer中，需要将这个lsn加到buffer的对应节点中
-                     *从buffer的末端找一个节点，将一个已经写回的lsn从节点中删除(如果找到的话)，更改这个节点的状态，同时将这个新的
-                     *lsn加到相应的buffer节点中，该节点可能在buffer头，不在的话，将其移到头部。如果没有找到已经写回的lsn，在buffer
-                     *节点找一个group整体写回，将这个子请求挂在这个请求上。可以提前挂在一个channel上。
-                     *第一步:将buffer队尾的已经写回的节点删除一个，为新的lsn腾出空间，这里需要修改队尾某节点的stored状态这里还需要
-                     *       增加，当没有可以之间删除的lsn时，需要产生新的写子请求，写回LRU最后的节点。
-                     *第二步:将新的lsn加到所述的buffer节点中。
+                     *lsn은 히트하지 않았지만 노드는 버퍼에 있습니다. 이 lsn은 버퍼의 해당 노드에 추가되어야 합니다.
+                     * 버퍼의 끝에서 노드를 찾고, 노드에서 다시 쓰여진 lsn을 삭제하고(찾으면), 이 노드의 상태를 변경하고, 동시에 이 새 항목을 작성합니다.
+                     *lsn이 해당 버퍼 노드에 추가되면 해당 노드가 버퍼 헤드에 있을 수 있으며 그렇지 않은 경우 헤드로 이동합니다. 다시 쓰여진 lsn을 찾을 수 없는 경우 버퍼에서
+                     *노드는 전체적으로 다시 쓸 그룹을 찾고 이 요청에 대해 이 하위 요청을 중단합니다. 미리 채널에 걸 수 있습니다.
+                     *첫 번째 단계: 새로운 lsn을 위한 공간을 만들기 위해 버퍼 큐 끝에 다시 쓰여진 노드를 삭제합니다. 여기에서 큐 끝에 있는 노드의 저장된 상태를 수정해야 합니다.
+                     * 추가됨, 삭제할 수 있는 lsn이 없는 경우 LRU의 마지막 노드에 다시 쓰기 위해 새로운 쓰기 하위 요청을 생성해야 합니다.
+                     *2단계: 버퍼 노드에 새 lsn을 추가합니다.
                      *************************************************************************************************************/	
-                    ssd->dram->buffer->write_miss_hit++;
+                    ssd->dram->buffer->write_miss_hit++; //xx_miss_hit가 lsn은 miss지만 노드는 버퍼에 있는 경우를 말하는 듯
 
                     if(ssd->dram->buffer->buffer_sector_count>=ssd->dram->buffer->max_buffer_sector)
                     {
-                        if (buffer_node==ssd->dram->buffer->buffer_tail)                  /*如果命中的节点是buffer中最后一个节点，交换最后两个节点*/
+                        if (buffer_node==ssd->dram->buffer->buffer_tail)                  /*히트 노드가 버퍼의 마지막 노드인 경우 마지막 두 노드를 교환합니다.*/
                         {
                             pt = ssd->dram->buffer->buffer_tail->LRU_link_pre;
                             ssd->dram->buffer->buffer_tail->LRU_link_pre=pt->LRU_link_pre;
@@ -457,7 +467,6 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                             pt->LRU_link_next=NULL;
                             pt->LRU_link_pre=ssd->dram->buffer->buffer_tail;
                             ssd->dram->buffer->buffer_tail=pt;
-
                         }
                         sub_req=NULL;
                         sub_req_state=ssd->dram->buffer->buffer_tail->stored; 
@@ -480,8 +489,8 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                         avlTreeDel(ssd->dram->buffer, (TREE_NODE *) pt);
 
                         /************************************************************************/
-                        /* 改:  挂在了子请求，buffer的节点不应立即删除，						*/
-                        /*			需等到写回了之后才能删除									*/
+                        /*변경: 버퍼의 노드는 하위 요청이 중단된 직후에 삭제되지 않아야 합니다.	    */
+                        /*삭제하기 전에 다시 쓸 때까지 기다려야 합니다.							   */
                         /************************************************************************/
                         if(ssd->dram->buffer->buffer_head->LRU_link_next == NULL)
                         {
@@ -497,11 +506,11 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
                         pt = NULL;	
                     }
 
-                    /*第二步:将新的lsn加到所述的buffer节点中*/	
+                    /*2단계: 버퍼 노드에 새 lsn 추가*/	
                     add_flag=0x00000001<<(lsn%ssd->parameter->subpage_page);
 
-                    if(ssd->dram->buffer->buffer_head!=buffer_node)                      /*如果该buffer节点不在buffer的队首，需要将这个节点提到队首*/
-                    {				
+                    if(ssd->dram->buffer->buffer_head!=buffer_node)                      /*버퍼 노드가 버퍼의 큐 헤드에 없으면 이 노드를 큐의 헤드에 언급해야 합니다.*/
+                    {//헤드로 옮기는 과정 + 원래 위치의 앞뒤노드 연결				
                         if(ssd->dram->buffer->buffer_tail==buffer_node)
                         {					
                             buffer_node->LRU_link_pre->LRU_link_next=NULL;					
@@ -530,7 +539,7 @@ struct ssd_info * insert2buffer(struct ssd_info *ssd,unsigned int lpn,int state,
 }
 
 /**************************************************************************************
- *函数的功能是寻找活跃快，应为每个plane中都只有一个活跃块，只有这个活跃块中才能进行操作
+ *함수의 기능은 활성 블록을 찾는 것입니다.각 plane에는 활성 블록이 하나만 있어야 하며 이 활성 블록만 작동할 수 있습니다.
  ***************************************************************************************/
 Status  find_active_block(struct ssd_info *ssd,unsigned int channel,unsigned int chip,unsigned int die,unsigned int plane)
 {
@@ -541,26 +550,28 @@ Status  find_active_block(struct ssd_info *ssd,unsigned int channel,unsigned int
     active_block=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].active_block;
     free_page_num=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[active_block].free_page_num;
     //last_write_page=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[active_block].free_page_num;
-    while((free_page_num==0)&&(count<ssd->parameter->block_plane))
+
+    //active block => free page가 존재하는 block
+    while((free_page_num==0)&&(count<ssd->parameter->block_plane)) //free page가 존재하는 블럭을 찾을 때까지 반복 (plane당 block의 수만큼 또 반복)
     {
         active_block=(active_block+1)%ssd->parameter->block_plane;	
         free_page_num=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[active_block].free_page_num;
         count++;
     }
-    ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].active_block=active_block;
+    ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].active_block=active_block; //plane에서 찾은 active block을 설정
     if(count<ssd->parameter->block_plane)
     {
         return SUCCESS;
     }
-    else
+    else //count = block_plane이니까 해당 plane에 free page가 있는 block이 없는 경우
     {
         return FAILURE;
     }
 }
 
 /*************************************************
- *这个函数的功能就是一个模拟一个实实在在的写操作
- *就是更改这个page的相关参数，以及整个ssd的统计参数
+ *이 함수의 기능은 실제 쓰기 작업을 시뮬레이션하는 것입니다.
+ *이 페이지의 관련 매개변수와 전체 ssd의 통계 매개변수를 변경하는 것입니다.
  **************************************************/
 Status write_page(struct ssd_info *ssd,unsigned int channel,unsigned int chip,unsigned int die,unsigned int plane,unsigned int active_block,unsigned int *ppn)
 {
@@ -583,7 +594,7 @@ Status write_page(struct ssd_info *ssd,unsigned int channel,unsigned int chip,un
 }
 
 /**********************************************
- *这个函数的功能是根据lpn，size，state创建子请求
+ *이 함수의 기능은 lpn, 크기, 상태를 기반으로 하위 요청을 생성하는 것입니다.
  **********************************************/
 struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,int size,unsigned int state,struct request * req,unsigned int operation)
 {
@@ -592,7 +603,7 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
     struct local * loc=NULL;
     unsigned int flag=0;
 
-    sub = (struct sub_request*)malloc(sizeof(struct sub_request));                        /*申请一个子请求的结构*/
+    sub = (struct sub_request*)malloc(sizeof(struct sub_request));                        /*하위 요청 구조 요청*/
     alloc_assert(sub,"sub_request");
     memset(sub,0, sizeof(struct sub_request));
 
@@ -612,8 +623,8 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
     }
 
     /*************************************************************************************
-     *在读操作的情况下，有一点非常重要就是要预先判断读子请求队列中是否有与这个子请求相同的，
-     *有的话，新子请求就不必再执行了，将新的子请求直接赋为完成
+     *읽기 동작의 경우 읽기 서브 요청 큐에 이 서브 요청과 동일한 서브 요청이 있는지 여부를 미리 판단하는 것이 매우 중요합니다.
+     *있는 경우 새 하위 요청을 실행할 필요가 없으며 새 하위 요청이 완료로 직접 할당됩니다.
      **************************************************************************************/
     if (operation == READ)
     {	
@@ -625,13 +636,13 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
         sub->next_state = SR_R_C_A_TRANSFER;
         sub->next_state_predict_time=MAX_INT64;
         sub->lpn = lpn;
-        sub->size=size;                                                               /*需要计算出该子请求的请求大小*/
+        sub->size=size;                                                               /*하위 요청의 요청 크기를 계산해야 합니다.*/
 
         p_ch = &ssd->channel_head[loc->channel];	
         sub->ppn = ssd->dram->map->map_entry[lpn].pn;
         sub->operation = READ;
         sub->state=(ssd->dram->map->map_entry[lpn].state&0x7fffffff);
-        sub_r=p_ch->subs_r_head;                                                      /*一下几行包括flag用于判断该读子请求队列中是否有与这个子请求相同的，有的话，将新的子请求直接赋为完成*/
+        sub_r=p_ch->subs_r_head;                                                      /*다음 줄에는 읽기 하위 요청 대기열에 이 하위 요청과 동일한 하위 요청이 있는지 여부를 결정하는 플래그가 포함되어 있으며, 그렇다면 새 하위 요청을 완료된 것으로 할당합니다.*/
         flag=0;
         while (sub_r!=NULL)
         {
@@ -644,12 +655,12 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
         }
         if (flag==0)
         {
-            if (p_ch->subs_r_tail!=NULL)
+            if (p_ch->subs_r_tail!=NULL) //channel에 sub request가 존재하는 경우 sub를 tail로 설정
             {
                 p_ch->subs_r_tail->next_node=sub;
                 p_ch->subs_r_tail=sub;
             } 
-            else
+            else //channel에 sub request가 없는 경우 sub를 head로 설정
             {
                 p_ch->subs_r_head=sub;
                 p_ch->subs_r_tail=sub;
@@ -665,7 +676,7 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
         }
     }
     /*************************************************************************************
-     *写请求的情况下，就需要利用到函数allocate_location(ssd ,sub)来处理静态分配和动态分配了
+     *쓰기 요청의 경우 정적 할당 및 동적 할당을 처리하기 위해 assign_location(ssd, sub) 함수를 사용해야 합니다.
      **************************************************************************************/
     else if(operation == WRITE)
     {                                
@@ -682,7 +693,7 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
         sub->state=state;
         sub->begin_time=ssd->current_time;
 
-        if (allocate_location(ssd ,sub)==ERROR)
+        if (allocate_location(ssd ,sub)==ERROR) //위치할당에 실패한 경우
         {
             free(sub->location);
             sub->location=NULL;
@@ -692,7 +703,7 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
         }
 
     }
-    else
+    else //read/write가 아닌 경우
     {
         free(sub->location);
         sub->location=NULL;
@@ -706,8 +717,8 @@ struct sub_request * creat_sub_request(struct ssd_info * ssd,unsigned int lpn,in
 }
 
 /******************************************************
- *函数的功能是在给出的channel，chip，die上面寻找读子请求
- *这个子请求的ppn要与相应的plane的寄存器里面的ppn相符
+ *함수의 기능은 주어진 채널, 칩, 다이에서 읽기 하위 요청을 찾는 것입니다.
+ * 이 하위 요청의 ppn은 해당 평면의 레지스터에 있는 ppn과 일치해야 합니다.
  *******************************************************/
 struct sub_request * find_read_sub_request(struct ssd_info * ssd, unsigned int channel, unsigned int chip, unsigned int die)
 {
@@ -720,17 +731,17 @@ struct sub_request * find_read_sub_request(struct ssd_info * ssd, unsigned int c
         address_ppn=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].add_reg_ppn;
         if(address_ppn!=-1)
         {
-            sub=ssd->channel_head[channel].subs_r_head;
-            if(sub->ppn==address_ppn)
+            sub=ssd->channel_head[channel].subs_r_head; //sub request list의 head -> sub
+            if(sub->ppn==address_ppn) //ppn이 바로 맞으면
             {
-                if(sub->next_node==NULL)
+                if(sub->next_node==NULL) //다음 하위 요청이 없는 경우
                 {
                     ssd->channel_head[channel].subs_r_head=NULL;
                     ssd->channel_head[channel].subs_r_tail=NULL;
                 }
                 ssd->channel_head[channel].subs_r_head=sub->next_node;
             }
-            while((sub->ppn!=address_ppn)&&(sub->next_node!=NULL))
+            while((sub->ppn!=address_ppn)&&(sub->next_node!=NULL)) //다음 하위 요청 노드가 있는 경우
             {
                 if(sub->next_node->ppn==address_ppn)
                 {
@@ -764,23 +775,23 @@ struct sub_request * find_read_sub_request(struct ssd_info * ssd, unsigned int c
 }
 
 /*******************************************************************************
- *函数的功能是寻找写子请求。
- *分两种情况1，要是是完全动态分配就在ssd->subs_w_head队列上找
- *2，要是不是完全动态分配那么就在ssd->channel_head[channel].subs_w_head队列上查找
+ *함수의 기능은 쓰기 하위 요청을 찾는 것입니다.
+ * 두 가지 경우 1이 있습니다. 완전히 동적 할당인 경우 ssd->subs_w_head 대기열에서 찾을 수 있습니다.
+ *2, 완전히 동적으로 할당되지 않은 경우 ssd->channel_head[channel].subs_w_head 대기열에서 조회합니다.
  ********************************************************************************/
 struct sub_request * find_write_sub_request(struct ssd_info * ssd, unsigned int channel)
 {
     struct sub_request * sub=NULL,* p=NULL;
-    if ((ssd->parameter->allocation_scheme==0)&&(ssd->parameter->dynamic_allocation==0))    /*是完全的动态分配*/
+    if ((ssd->parameter->allocation_scheme==0)&&(ssd->parameter->dynamic_allocation==0))    /*완전 동적 할당*/
     {
         sub=ssd->subs_w_head;
         while(sub!=NULL)        							
         {
             if(sub->current_state==SR_WAIT)								
             {
-                if (sub->update!=NULL)                                                      /*如果有需要提前读出的页*/
+                if (sub->update!=NULL)                                                      /*미리 읽어야 할 페이지가 있는 경우*/
                 {
-                    if ((sub->update->current_state==SR_COMPLETE)||((sub->update->next_state==SR_COMPLETE)&&(sub->update->next_state_predict_time<=ssd->current_time)))   //被更新的页已经被读出
+                    if ((sub->update->current_state==SR_COMPLETE)||((sub->update->next_state==SR_COMPLETE)&&(sub->update->next_state_predict_time<=ssd->current_time)))   //업데이트된 페이지를 읽었습니다.
                     {
                         break;
                     }
@@ -794,7 +805,7 @@ struct sub_request * find_write_sub_request(struct ssd_info * ssd, unsigned int 
             sub=sub->next_node;							
         }
 
-        if (sub==NULL)                                                                      /*如果没有找到可以服务的子请求，跳出这个for循环*/
+        if (sub==NULL)                                                                      /*제공할 하위 요청이 없으면 for 루프를 중단합니다.*/
         {
             return NULL;
         }
@@ -836,10 +847,10 @@ struct sub_request * find_write_sub_request(struct ssd_info * ssd, unsigned int 
         }
     }
     /**********************************************************
-     *除了全动态分配方式，其他方式的请求已经分配到特定的channel，
-     *就只需要在channel上找出准备服务的子请求
+     *완전 동적 할당 방법 외에도 특정 채널에 다른 요청 방법이 할당되어 있습니다.
+     * 채널에서 제공할 하위 요청을 찾기만 하면 됩니다.
      ***********************************************************/
-    else            
+    else  //정적할당
     {
         sub=ssd->channel_head[channel].subs_w_head;
         while(sub!=NULL)        						
@@ -848,7 +859,7 @@ struct sub_request * find_write_sub_request(struct ssd_info * ssd, unsigned int 
             {
                 if (sub->update!=NULL)    
                 {
-                    if ((sub->update->current_state==SR_COMPLETE)||((sub->update->next_state==SR_COMPLETE)&&(sub->update->next_state_predict_time<=ssd->current_time)))   //被更新的页已经被读出
+                    if ((sub->update->current_state==SR_COMPLETE)||((sub->update->next_state==SR_COMPLETE)&&(sub->update->next_state_predict_time<=ssd->current_time)))   //업데이트된 페이지를 읽었습니다.
                     {
                         break;
                     }
@@ -872,25 +883,25 @@ struct sub_request * find_write_sub_request(struct ssd_info * ssd, unsigned int 
 }
 
 /*********************************************************************************************
- *专门为读子请求服务的函数
- *1，只有当读子请求的当前状态是SR_R_C_A_TRANSFER
- *2，读子请求的当前状态是SR_COMPLETE或者下一状态是SR_COMPLETE并且下一状态到达的时间比当前时间小
+ *읽기 하위 요청을 처리하는 전용 기능
+ *1, 읽기 하위 요청의 현재 상태가 SR_R_C_A_TRANSFER인 경우에만
+ *2, 읽기 서브 요청의 현재 상태가 SR_COMPLETE이거나 다음 상태가 SR_COMPLETE이고 다음 상태의 도달 시간이 현재 시간보다 짧은 경우
  **********************************************************************************************/
 Status services_2_r_cmd_trans_and_complete(struct ssd_info * ssd)
 {
     unsigned int i=0;
     struct sub_request * sub=NULL, * p=NULL;
-    for(i=0;i<ssd->parameter->channel_number;i++)                                       /*这个循环处理不需要channel的时间(读命令已经到达chip，chip由ready变为busy)，当读请求完成时，将其从channel的队列中取出*/
+    for(i=0;i<ssd->parameter->channel_number;i++)                                       /*이 루프 처리는 채널의 시간을 필요로 하지 않으며(읽기 명령이 칩에 도달하고 칩이 준비에서 사용 중으로 변경됨) 읽기 요청이 완료되면 채널의 큐에서 제거됩니다.*/
     {
         sub=ssd->channel_head[i].subs_r_head;
 
         while(sub!=NULL)
         {
-            if(sub->current_state==SR_R_C_A_TRANSFER)                                  /*读命令发送完毕，将对应的die置为busy，同时修改sub的状态; 这个部分专门处理读请求由当前状态为传命令变为die开始busy，die开始busy不需要channel为空，所以单独列出*/
+            if(sub->current_state==SR_R_C_A_TRANSFER)                                  /*읽기 명령이 전송된 후 해당 다이를 사용 중으로 설정하고 서브 상태를 수정합니다. 이 부분은 패스 명령의 현재 상태에서 다이 시작 사용 중 및 다이 시작 사용 중까지 읽기 요청을 처리하는 데 전념합니다. 채널을 비워둘 필요가 없으므로 별도로 나열됩니다.*/
             {
                 if(sub->next_state_predict_time<=ssd->current_time)
                 {
-                    go_one_step(ssd, sub,NULL, SR_R_READ,NORMAL);                      /*状态跳变处理函数*/
+                    go_one_step(ssd, sub,NULL, SR_R_READ,NORMAL);                      /*상태 전환 핸들러*/
 
                 }
             }
@@ -922,8 +933,8 @@ Status services_2_r_cmd_trans_and_complete(struct ssd_info * ssd)
 }
 
 /**************************************************************************
- *这个函数也是只处理读子请求，处理chip当前状态是CHIP_WAIT，
- *或者下一个状态是CHIP_DATA_TRANSFER并且下一状态的预计时间小于当前时间的chip
+ *이 기능은 또한 읽기 하위 요청만 처리하며 처리 칩의 현재 상태는 CHIP_WAIT입니다.
+ *또는 다음 상태가 CHIP_DATA_TRANSFER이고 다음 상태에 대한 예상 시간이 현재 시간보다 짧은 칩
  ***************************************************************************/
 Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsigned int * channel_busy_flag, unsigned int * change_current_time_flag)
 {
@@ -939,7 +950,7 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
         {
             for(die=0;die<ssd->parameter->die_chip;die++)
             {
-                sub=find_read_sub_request(ssd,channel,chip,die);                   /*在channel,chip,die中找到读子请求*/
+                sub=find_read_sub_request(ssd,channel,chip,die);                   /*채널, 칩, 다이에서 읽기 하위 요청 찾기*/
                 if(sub!=NULL)
                 {
                     break;
@@ -952,23 +963,23 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
             }
 
             /**************************************************************************************
-             *如果ssd支持高级命令，那没我们可以一起处理支持AD_TWOPLANE_READ，AD_INTERLEAVE的读子请求
-             *1，有可能产生了two plane操作，在这种情况下，将同一个die上的两个plane的数据依次传出
-             *2，有可能产生了interleave操作，在这种情况下，将不同die上的两个plane的数据依次传出
+             *ssd가 고급 명령을 지원하면 AD_TWOPLANE_READ 및 AD_INTERLEAVE를 함께 지원하는 읽기 하위 요청을 처리할 수 있습니다.
+             *1, 두 개의 평면 작업이 있을 수 있으며 이 경우 동일한 다이에 있는 두 평면의 데이터가 차례로 전송됩니다.
+             *2, 인터리브 연산이 있을 수 있으며, 이 경우 서로 다른 다이에 있는 두 플레인의 데이터가 차례로 전송됩니다.
              ***************************************************************************************/
             if(((ssd->parameter->advanced_commands&AD_TWOPLANE_READ)==AD_TWOPLANE_READ)||((ssd->parameter->advanced_commands&AD_INTERLEAVE)==AD_INTERLEAVE))
             {
-                if ((ssd->parameter->advanced_commands&AD_TWOPLANE_READ)==AD_TWOPLANE_READ)     /*有可能产生了two plane操作，在这种情况下，将同一个die上的两个plane的数据依次传出*/
+                if ((ssd->parameter->advanced_commands&AD_TWOPLANE_READ)==AD_TWOPLANE_READ)     /*2 plane 연산 생성이 가능하며 이 경우 같은 다이에 있는 두 plane의 데이터가 차례로 출력된다.*/
                 {
                     sub_twoplane_one=sub;
                     sub_twoplane_two=NULL;                                                      
-                    /*为了保证找到的sub_twoplane_two与sub_twoplane_one不同，令add_reg_ppn=-1*/
+                    /*발견된 sub_twoplane_two가 sub_twoplane_one과 다른지 확인하려면 add_reg_ppn=-1로 설정합니다.*/
                     ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[sub->location->plane].add_reg_ppn=-1;
-                    sub_twoplane_two=find_read_sub_request(ssd,channel,chip,die);               /*在相同的channel,chip,die中寻找另外一个读子请求*/
+                    sub_twoplane_two=find_read_sub_request(ssd,channel,chip,die);               /*동일한 채널, 칩, 다이에서 다른 읽기 하위 요청 찾기*/
 
                     /******************************************************
-                     *如果找到了那么就执行TWO_PLANE的状态转换函数go_one_step
-                     *如果没找到那么就执行普通命令的状态转换函数go_one_step
+                     *발견되면 TWO_PLANE의 상태 전환 기능 go_one_step을 실행합니다.
+                     * 찾지 못한 경우 일반 명령의 상태 전환 기능 go_one_step을 실행합니다.
                      ******************************************************/
                     if (sub_twoplane_two==NULL)
                     {
@@ -985,7 +996,7 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
 
                     }
                 } 
-                else if ((ssd->parameter->advanced_commands&AD_INTERLEAVE)==AD_INTERLEAVE)      /*有可能产生了interleave操作，在这种情况下，将不同die上的两个plane的数据依次传出*/
+                else if ((ssd->parameter->advanced_commands&AD_INTERLEAVE)==AD_INTERLEAVE)      /*인터리브 연산을 생성하는 것이 가능하며, 이 경우 서로 다른 다이에 있는 두 플레인의 데이터가 차례로 전송됩니다.*/
                 {
                     sub_interleave_one=sub;
                     sub_interleave_two=NULL;
@@ -995,7 +1006,7 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
                     {	
                         if(die1!=die)
                         {
-                            sub_interleave_two=find_read_sub_request(ssd,channel,chip,die1);    /*在相同的channel，chhip不同的die上面找另外一个读子请求*/
+                            sub_interleave_two=find_read_sub_request(ssd,channel,chip,die1);    /*다른 칩을 사용하여 동일한 채널에서 다른 읽기 하위 요청 찾기*/
                             if(sub_interleave_two!=NULL)
                             {
                                 break;
@@ -1020,7 +1031,7 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
                     }
                 }
             }
-            else                                                                                 /*如果ssd不支持高级命令那么就执行一个一个的执行读子请求*/
+            else                                                                                 /*ssd가 고급 명령을 지원하지 않는 경우 읽기 하위 요청을 하나씩 실행합니다.*/
             {
 
                 go_one_step(ssd, sub,NULL, SR_R_DATA_TRANSFER,NORMAL);
@@ -1041,7 +1052,7 @@ Status services_2_r_data_trans(struct ssd_info * ssd,unsigned int channel,unsign
 
 
 /******************************************************
- *这个函数也是只服务读子请求，并且处于等待状态的读子请求
+ *이 기능은 또한 읽기 하위 요청과 대기 상태의 읽기 하위 요청만 제공합니다.
  *******************************************************/
 int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * channel_busy_flag, unsigned int * change_current_time_flag)
 {
@@ -1058,35 +1069,34 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
     {
         sub_twoplane_one=NULL;
         sub_twoplane_two=NULL;                                                         
-        /*寻找能执行two_plane的两个读子请求*/
+        /*two_plane을 수행할 수 있는 두 개의 읽기 요청 찾기*/
         find_interleave_twoplane_sub_request(ssd,channel,sub_twoplane_one,sub_twoplane_two,TWO_PLANE);
 
-        if (sub_twoplane_two!=NULL)                                                     /*可以执行two plane read 操作*/
+        if (sub_twoplane_two!=NULL)                                                     /*두 개의 평면 읽기 작업을 수행할 수 있습니다.*/
         {
             go_one_step(ssd, sub_twoplane_one,sub_twoplane_two, SR_R_C_A_TRANSFER,TWO_PLANE);
 
             *change_current_time_flag=0;
-            *channel_busy_flag=1;                                                       /*已经占用了这个周期的总线，不用执行die中数据的回传*/
+            *channel_busy_flag=1;                                                       /*이미 이 주기를 점유한 버스는 다이에서 데이터 반환을 수행할 필요가 없습니다.*/
         } 
-        else if((ssd->parameter->advanced_commands&AD_INTERLEAVE)!=AD_INTERLEAVE)       /*没有满足条件的两个page，，并且没有interleave read命令时，只能执行单个page的读*/
+        else if((ssd->parameter->advanced_commands&AD_INTERLEAVE)!=AD_INTERLEAVE)       /*조건에 맞는 두 페이지가 없고, 인터리브 읽기 명령이 없을 때 한 페이지만 읽을 수 있음*/
         {
             while(sub!=NULL)                                                            /*if there are read requests in queue, send one of them to target die*/			
             {		
                 if(sub->current_state==SR_WAIT)									
-                {	                                                                    /*注意下个这个判断条件与services_2_r_data_trans中判断条件的不同
-                */
+                {	                                                                    /*다음 판단 조건은 services_2_r_data_trans의 판단 조건과 다릅니다.*/
                     if((ssd->channel_head[sub->location->channel].chip_head[sub->location->chip].current_state==CHIP_IDLE)||((ssd->channel_head[sub->location->channel].chip_head[sub->location->chip].next_state==CHIP_IDLE)&&
                                 (ssd->channel_head[sub->location->channel].chip_head[sub->location->chip].next_state_predict_time<=ssd->current_time)))												
                     {	
                         go_one_step(ssd, sub,NULL, SR_R_C_A_TRANSFER,NORMAL);
 
                         *change_current_time_flag=0;
-                        *channel_busy_flag=1;                                           /*已经占用了这个周期的总线，不用执行die中数据的回传*/
+                        *channel_busy_flag=1;                                           /*이미 이 주기를 점유한 버스는 다이에서 데이터 반환을 수행할 필요가 없습니다.*/
                         break;										
                     }	
                     else
                     {
-                        /*因为die的busy导致的阻塞*/
+                        /*다이의 혼잡으로 인한 막힘*/
                     }
                 }						
                 sub=sub->next_node;								
@@ -1099,15 +1109,15 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
         sub_interleave_two=NULL;
         find_interleave_twoplane_sub_request(ssd,channel,sub_interleave_one,sub_interleave_two,INTERLEAVE);
 
-        if (sub_interleave_two!=NULL)                                                  /*可以执行interleave read 操作*/
+        if (sub_interleave_two!=NULL)                                                  /*인터리브 읽기 작업을 수행할 수 있습니다.*/
         {
 
             go_one_step(ssd, sub_interleave_one,sub_interleave_two, SR_R_C_A_TRANSFER,INTERLEAVE);
 
             *change_current_time_flag=0;
-            *channel_busy_flag=1;                                                      /*已经占用了这个周期的总线，不用执行die中数据的回传*/
+            *channel_busy_flag=1;                                                      /*이미 이 주기를 점유한 버스는 다이에서 데이터 반환을 수행할 필요가 없습니다.*/
         } 
-        else                                                                           /*没有满足条件的两个page，只能执行单个page的读*/
+        else                                                                           /*조건에 맞는 두 페이지가 없을 경우 한 페이지만 읽을 수 있습니다.*/
         {
             while(sub!=NULL)                                                           /*if there are read requests in queue, send one of them to target die*/			
             {		
@@ -1120,12 +1130,12 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
                         go_one_step(ssd, sub,NULL, SR_R_C_A_TRANSFER,NORMAL);
 
                         *change_current_time_flag=0;
-                        *channel_busy_flag=1;                                          /*已经占用了这个周期的总线，不用执行die中数据的回传*/
+                        *channel_busy_flag=1;                                          /*이미 이 주기를 점유한 버스는 다이에서 데이터 반환을 수행할 필요가 없습니다.*/
                         break;										
                     }	
                     else
                     {
-                        /*因为die的busy导致的阻塞*/
+                        /*다이의 혼잡으로 인한 막힘*/
                     }
                 }						
                 sub=sub->next_node;								
@@ -1134,7 +1144,7 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
     }
 
     /*******************************
-     *ssd不能执行执行高级命令的情况下
+     *ssd가 고급 명령을 실행할 수 없는 경우
      *******************************/
     if (((ssd->parameter->advanced_commands&AD_INTERLEAVE)!=AD_INTERLEAVE)&&((ssd->parameter->advanced_commands&AD_TWOPLANE_READ)!=AD_TWOPLANE_READ))
     {
@@ -1149,12 +1159,12 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
                     go_one_step(ssd, sub,NULL, SR_R_C_A_TRANSFER,NORMAL);
 
                     *change_current_time_flag=0;
-                    *channel_busy_flag=1;                                              /*已经占用了这个周期的总线，不用执行die中数据的回传*/
+                    *channel_busy_flag=1;                                              /*이미 이 주기를 점유한 버스는 다이에서 데이터 반환을 수행할 필요가 없습니다.*/
                     break;										
                 }	
                 else
                 {
-                    /*因为die的busy导致的阻塞*/
+                    /*다이의 혼잡으로 인한 막힘*/
                 }
             }						
             sub=sub->next_node;								
@@ -1165,12 +1175,12 @@ int services_2_r_wait(struct ssd_info * ssd,unsigned int channel,unsigned int * 
 }
 
 /*********************************************************************
- *当一个写子请求处理完后，要从请求队列上删除，这个函数就是执行这个功能。
+ *쓰기 하위 요청이 처리되면 요청 큐에서 삭제해야 하며 이 기능을 수행하는 기능입니다.
  **********************************************************************/
 int delete_w_sub_request(struct ssd_info * ssd, unsigned int channel, struct sub_request * sub )
 {
     struct sub_request * p=NULL;
-    if (sub==ssd->channel_head[channel].subs_w_head)                                   /*将这个子请求从channel队列中删除*/
+    if (sub==ssd->channel_head[channel].subs_w_head)                                   /*채널 대기열에서 이 하위 요청을 제거합니다.*/
     {
         if (ssd->channel_head[channel].subs_w_head!=ssd->channel_head[channel].subs_w_tail)
         {
@@ -1205,16 +1215,16 @@ int delete_w_sub_request(struct ssd_info * ssd, unsigned int channel, struct sub
 }
 
 /*
- *函数的功能就是执行copyback命令的功能，
+ *기능의 기능은 copyback 명령의 기능을 실행하는 것이며,
  */
 Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip, unsigned int die,struct sub_request * sub)
 {
     int old_ppn=-1, new_ppn=-1;
     long long time=0;
-    if (ssd->parameter->greed_CB_ad==1)                                               /*允许贪婪使用copyback高级命令*/
+    if (ssd->parameter->greed_CB_ad==1)                                               /*카피백 고급 명령의 탐욕적인 사용 허용*/
     {
         old_ppn=-1;
-        if (ssd->dram->map->map_entry[sub->lpn].state!=0)                             /*说明这个逻辑页之前有写过，需要使用copyback+random input命令，否则直接写下去即可*/
+        if (ssd->dram->map->map_entry[sub->lpn].state!=0)                             /*이것은 이 논리적 페이지가 이전에 작성되었음을 의미합니다. copyback+random input 명령을 사용해야 합니다. 그렇지 않으면 직접 작성할 수 있습니다.*/
         {
             if ((sub->state&ssd->dram->map->map_entry[sub->lpn].state)==ssd->dram->map->map_entry[sub->lpn].state)       
             {
@@ -1226,7 +1236,7 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
                 ssd->copy_back_count++;
                 ssd->read_count++;
                 ssd->update_read_count++;
-                old_ppn=ssd->dram->map->map_entry[sub->lpn].pn;                       /*记录原来的物理页，用于在copyback时，判断是否满足同为奇地址或者偶地址*/
+                old_ppn=ssd->dram->map->map_entry[sub->lpn].pn;                       /*동일한 주소가 카피백 중에 홀수인지 짝수인지 판별하는 데 사용되는 원본 물리적 페이지를 기록합니다.*/
             }															
         } 
         else
@@ -1238,10 +1248,10 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
 
         get_ppn(ssd,sub->location->channel,sub->location->chip,sub->location->die,sub->location->plane,sub);
 
-        if (old_ppn!=-1)                                                              /*采用了copyback操作，需要判断是否满足了奇偶地址的限制*/
+        if (old_ppn!=-1)                                                              /*카피백 연산을 사용하는 경우에는 패리티 주소 제한이 충족되는지 여부를 판별해야 합니다.*/
         {
             new_ppn=ssd->dram->map->map_entry[sub->lpn].pn;
-            while (old_ppn%2!=new_ppn%2)                                              /*没有满足奇偶地址限制，需要再往下找一页*/
+            while (old_ppn%2!=new_ppn%2)                                              /*패리티 주소 제한이 충족되지 않았습니다. 다른 페이지를 찾아야 합니다.*/
             {
                 get_ppn(ssd,sub->location->channel,sub->location->chip,sub->location->die,sub->location->plane,sub);
                 ssd->program_count--;
@@ -1251,7 +1261,7 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
             }
         }
     } 
-    else                                                                              /*不能贪婪的使用copyback高级命令*/
+    else                                                                              /*카피백 고급 명령을 탐욕스럽게 사용하지 마십시오.*/
     {
         if (ssd->dram->map->map_entry[sub->lpn].state!=0)
         {
@@ -1262,7 +1272,7 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
             } 
             else
             {
-                old_ppn=ssd->dram->map->map_entry[sub->lpn].pn;                       /*记录原来的物理页，用于在copyback时，判断是否满足同为奇地址或者偶地址*/
+                old_ppn=ssd->dram->map->map_entry[sub->lpn].pn;                       /*동일한 주소가 카피백 중에 홀수인지 짝수인지 판별하는 데 사용되는 원본 물리적 페이지를 기록합니다.*/
                 get_ppn(ssd,sub->location->channel,sub->location->chip,sub->location->die,sub->location->plane,sub);
                 new_ppn=ssd->dram->map->map_entry[sub->lpn].pn;
                 if (old_ppn%2==new_ppn%2)
@@ -1288,7 +1298,7 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
     }
 
     /****************************************************************
-     *执行copyback高级命令时，需要修改channel，chip的状态，以及时间等
+     *copyback 고급 명령을 실행할 때 채널, 칩 상태, 시간 등을 수정해야 합니다.
      *****************************************************************/
     ssd->channel_head[channel].current_state=CHANNEL_TRANSFER;										
     ssd->channel_head[channel].current_time=ssd->current_time;										
@@ -1304,14 +1314,14 @@ Status copy_back(struct ssd_info * ssd, unsigned int channel, unsigned int chip,
 }
 
 /*****************
- *静态写操作的实现
+ *정적 쓰기 작업 구현
  ******************/
 Status static_write(struct ssd_info * ssd, unsigned int channel,unsigned int chip, unsigned int die,struct sub_request * sub)
 {
     long long time=0;
-    if (ssd->dram->map->map_entry[sub->lpn].state!=0)                                    /*说明这个逻辑页之前有写过，需要使用先读出来，再写下去，否则直接写下去即可*/
+    if (ssd->dram->map->map_entry[sub->lpn].state!=0)                                    /*이것은 이 논리적 페이지가 이전에 작성된 적이 있다는 것을 의미합니다. 이를 사용하여 먼저 읽은 다음 기록해야 합니다. 그렇지 않으면 직접 기록할 수 있습니다.*/
     {
-        if ((sub->state&ssd->dram->map->map_entry[sub->lpn].state)==ssd->dram->map->map_entry[sub->lpn].state)   /*可以覆盖*/
+        if ((sub->state&ssd->dram->map->map_entry[sub->lpn].state)==ssd->dram->map->map_entry[sub->lpn].state)   /*덮을 수 있다*/
         {
             sub->next_state_predict_time=ssd->current_time+7*ssd->parameter->time_characteristics.tWC+(sub->size*ssd->parameter->subpage_capacity)*ssd->parameter->time_characteristics.tWC;
         } 
@@ -1332,7 +1342,7 @@ Status static_write(struct ssd_info * ssd, unsigned int channel,unsigned int chi
     get_ppn(ssd,sub->location->channel,sub->location->chip,sub->location->die,sub->location->plane,sub);
 
     /****************************************************************
-     *执行copyback高级命令时，需要修改channel，chip的状态，以及时间等
+     *copyback 고급 명령을 실행할 때 채널, 칩 상태, 시간 등을 수정해야 합니다.
      *****************************************************************/
     ssd->channel_head[channel].current_state=CHANNEL_TRANSFER;										
     ssd->channel_head[channel].current_time=ssd->current_time;										
@@ -1348,7 +1358,7 @@ Status static_write(struct ssd_info * ssd, unsigned int channel,unsigned int chi
 }
 
 /********************
-  写子请求的处理函数
+  하위 요청에 대한 처리기 작성
  *********************/
 Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int * channel_busy_flag, unsigned int * change_current_time_flag)
 {
@@ -1363,12 +1373,12 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
     struct sub_request * sub_interleave_one=NULL, * sub_interleave_two=NULL;
 
     /************************************************************************************************************************
-     *写子请求挂在两个地方一个是channel_head[channel].subs_w_head，另外一个是ssd->subs_w_head，所以要保证至少有一个队列不为空
-     *同时子请求的处理还分为动态分配和静态分配。
+     *쓰기 하위 요청은 두 곳에서 중단됩니다. 하나는 channel_head[channel].subs_w_head이고 다른 하나는 ssd->subs_w_head입니다. 따라서 최소한 하나의 대기열이 비어 있지 않은지 확인하십시오.
+     * 동시에 부요청 처리도 동적할당과 정적할당으로 나뉜다.
      *************************************************************************************************************************/
     if((ssd->channel_head[channel].subs_w_head!=NULL)||(ssd->subs_w_head!=NULL))      
     {
-        if (ssd->parameter->allocation_scheme==0)                                       /*动态分配*/
+        if (ssd->parameter->allocation_scheme==0)                                       /*동적 할당*/
         {
             for(j=0;j<ssd->channel_head[channel].chip;j++)					
             {		
@@ -1377,7 +1387,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                     break;
                 }
 
-                chip_token=ssd->channel_head[channel].token;                            /*令牌*/
+                chip_token=ssd->channel_head[channel].token;                            /*토큰*/
                 if (*channel_busy_flag==0)
                 {
                     if((ssd->channel_head[channel].chip_head[chip_token].current_state==CHIP_IDLE)||((ssd->channel_head[channel].chip_head[chip_token].next_state==CHIP_IDLE)&&(ssd->channel_head[channel].chip_head[chip_token].next_state_predict_time<=ssd->current_time)))				
@@ -1409,14 +1419,14 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                                 {
                                     ssd->real_time_subreq--;
                                 }
-                                go_one_step(ssd,sub,NULL,SR_W_TRANSFER,NORMAL);       /*执行普通的状态的转变。*/
-                                delete_w_sub_request(ssd,channel,sub);                /*删掉处理完后的写子请求*/
+                                go_one_step(ssd,sub,NULL,SR_W_TRANSFER,NORMAL);       /*정상 상태 전환을 수행합니다.*/
+                                delete_w_sub_request(ssd,channel,sub);                /*처리된 쓰기 하위 요청 삭제*/
 
                                 *channel_busy_flag=1;
                                 /**************************************************************************
-                                 *跳出for循环前，修改令牌
-                                 *这里的token的变化完全取决于在这个channel chip die plane下写是否成功 
-                                 *成功了就break 没成功token就要变化直到找到能写成功的channel chip die plane
+                                 *for 루프를 벗어나기 전에 토큰을 수정하십시오.
+                                 *여기서 토큰의 변경은 이 채널 칩 다이 플레인 아래의 쓰기 성공 여부에 전적으로 달려 있습니다.
+                                 *성공하면 중단하고, 그렇지 않으면 성공적으로 쓸 수 있는 채널 칩 다이 평면을 찾을 때까지 토큰이 변경됩니다.
                                  ***************************************************************************/
                                 ssd->channel_head[channel].chip_head[chip_token].token=(ssd->channel_head[channel].chip_head[chip_token].token+1)%ssd->parameter->die_chip;
                                 ssd->channel_head[channel].token=(ssd->channel_head[channel].token+1)%ssd->parameter->chip_channel[channel];
@@ -1431,7 +1441,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                             }
                             else
                             {
-                                *channel_busy_flag=1;                                 /*执行了一个请求，传输了数据，占用了总线，需要跳出到下一个channel*/
+                                *channel_busy_flag=1;                                 /*요청이 실행되고 데이터가 전송되고 버스가 점유되고 다음 채널로 점프해야 합니다.*/
                                 ssd->channel_head[channel].chip_head[chip_token].token=(ssd->channel_head[channel].chip_head[chip_token].token+1)%ssd->parameter->die_chip;
                                 ssd->channel_head[channel].token=(ssd->channel_head[channel].token+1)%ssd->parameter->chip_channel[channel];
                                 break;
@@ -1445,7 +1455,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                 ssd->channel_head[channel].token=(ssd->channel_head[channel].token+1)%ssd->parameter->chip_channel[channel];
             }
         } 
-        else if(ssd->parameter->allocation_scheme==1)                                     /*静态分配*/
+        else if(ssd->parameter->allocation_scheme==1)                                     /*정적 할당*/
         {
             for(chip=0;chip<ssd->channel_head[channel].chip;chip++)					
             {	
@@ -1458,7 +1468,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                     if (*channel_busy_flag==0)
                     {
 
-                        if (((ssd->parameter->advanced_commands&AD_INTERLEAVE)!=AD_INTERLEAVE)&&((ssd->parameter->advanced_commands&AD_TWOPLANE)!=AD_TWOPLANE))     /*不执行高级命令*/
+                        if (((ssd->parameter->advanced_commands&AD_INTERLEAVE)!=AD_INTERLEAVE)&&((ssd->parameter->advanced_commands&AD_TWOPLANE)!=AD_TWOPLANE))     /*고급 명령을 실행하지 마십시오.*/
                         {
                             for(die=0;die<ssd->channel_head[channel].chip_head[chip].die_num;die++)				
                             {	
@@ -1469,7 +1479,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                                 sub=ssd->channel_head[channel].subs_w_head;
                                 while (sub!=NULL)
                                 {
-                                    if ((sub->current_state==SR_WAIT)&&(sub->location->channel==channel)&&(sub->location->chip==chip)&&(sub->location->die==die))      /*该子请求就是当前die的请求*/
+                                    if ((sub->current_state==SR_WAIT)&&(sub->location->channel==channel)&&(sub->location->chip==chip)&&(sub->location->die==die))      /*이 하위 요청은 현재 die의 요청입니다.*/
                                     {
                                         break;
                                     }
@@ -1488,12 +1498,12 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
 
                                     if ((ssd->parameter->advanced_commands&AD_COPYBACK)==AD_COPYBACK)
                                     {
-                                        copy_back(ssd, channel,chip, die,sub);      /*如果可以执行copyback高级命令，那么就用函数copy_back(ssd, channel,chip, die,sub)处理写子请求*/
+                                        copy_back(ssd, channel,chip, die,sub);      /*copyback 고급 명령을 실행할 수 있으면 copy_back(ssd, channel, chip, die, sub) 기능을 사용하여 쓰기 하위 요청을 처리합니다.*/
                                         *change_current_time_flag=0;
                                     } 
                                     else
                                     {
-                                        static_write(ssd, channel,chip, die,sub);   /*不能执行copyback高级命令，那么就用static_write(ssd, channel,chip, die,sub)函数来处理写子请求*/ 
+                                        static_write(ssd, channel,chip, die,sub);   /*copyback 고급 명령을 실행할 수 없는 경우 static_write(ssd, channel, chip, die, sub) 함수를 사용하여 쓰기 하위 요청을 처리합니다.*/ 
                                         *change_current_time_flag=0;
                                     }
 
@@ -1503,7 +1513,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                                 }
                             }
                         } 
-                        else                                                        /*不能处理高级命令*/
+                        else                                                        /*고급 명령을 처리할 수 없음*/
                         {
                             if (dynamic_advanced_process(ssd,channel,chip)==NULL)
                             {
@@ -1511,7 +1521,7 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
                             }
                             else
                             {
-                                *channel_busy_flag=1;                               /*执行了一个请求，传输了数据，占用了总线，需要跳出到下一个channel*/
+                                *channel_busy_flag=1;                               /*요청이 실행되고 데이터가 전송되고 버스가 점유되고 다음 채널로 점프해야 합니다.*/
                                 break;
                             }
                         }	
@@ -1526,18 +1536,18 @@ Status services_2_write(struct ssd_info * ssd,unsigned int channel,unsigned int 
 
 
 /********************************************************
- *这个函数的主要功能是主控读子请求和写子请求的状态变化处理
+ *이 함수의 주요 기능은 읽기 하위 요청 및 쓰기 하위 요청의 상태 변경 처리를 제어하는 ​​것입니다.
  *********************************************************/
 
 struct ssd_info *process(struct ssd_info *ssd)   
 {
 
     /*********************************************************************************************************
-     *flag_die表示是否因为die的busy，阻塞了时间前进，-1表示没有，非-1表示有阻塞，
-     *flag_die的值表示die号,old ppn记录在copyback之前的物理页号，用于判断copyback是否遵守了奇偶地址的限制；
-     *two_plane_bit[8],two_plane_place[8]数组成员表示同一个channel上每个die的请求分配情况；
-     *chg_cur_time_flag作为是否需要调整当前时间的标志位，当因为channel处于busy导致请求阻塞时，需要调整当前时间；
-     *初始认为需要调整，置为1，当任何一个channel处理了传送命令或者数据时，这个值置为0，表示不需要调整；
+     *flag_die는 다이의 혼잡으로 인해 시간이 차단되었는지 여부를 나타내며, -1은 아니오를 의미하고, non-1은 차단이 있음을 의미하고,
+     *flag_die의 값은 다이 번호를 나타내며 이전 ppn은 카피백이 패리티 주소 제한을 준수하는지 여부를 판단하는 데 사용되는 카피백 이전의 물리적 페이지 번호를 기록합니다.
+     *two_plane_bit[8], two_plane_place[8] 배열 멤버는 동일한 채널에서 각 다이의 요청 할당을 나타냅니다.
+     *chg_cur_time_flag는 현재 시간 조정 여부에 대한 플래그로 채널이 사용 중이어서 요청이 차단되면 현재 시간을 조정해야 합니다.
+     * 처음에는 조정이 필요하다고 생각하고 1로 설정하고 채널이 전송 명령 또는 데이터를 처리할 때 이 값은 0으로 설정되어 조정이 필요하지 않음을 나타냅니다.
      **********************************************************************************************************/
     int old_ppn=-1,flag_die=-1; 
     unsigned int i,chan,random_num;     
@@ -1550,8 +1560,8 @@ struct ssd_info *process(struct ssd_info *ssd)
 #endif
 
     /*********************************************************
-     *判断是否有读写子请求，如果有那么flag令为0，没有flag就为1
-     *当flag为1时，若ssd中有gc操作这时就可以执行gc操作
+     *읽기/쓰기 하위 요청이 있는지 확인하고 있으면 플래그가 0으로 설정되고 플래그가 없으면 1로 설정됩니다.
+     *플래그가 1일 때 ssd에 gc 연산이 있으면 이때 gc 연산을 수행할 수 있음
      **********************************************************/
     for(i=0;i<ssd->parameter->channel_number;i++)
     {          
@@ -1568,9 +1578,9 @@ struct ssd_info *process(struct ssd_info *ssd)
     if(flag==1)
     {
         ssd->flag=1;                                                                
-        if (ssd->gc_request>0)                                                            /*SSD中有gc操作的请求*/
+        if (ssd->gc_request>0)                                                            /*SSD에 gc 작업 요청이 있습니다.*/
         {
-            gc(ssd,0,1);                                                                  /*这个gc要求所有channel都必须遍历到*/
+            gc(ssd,0,1);                                                                  /*이 gc는 모든 채널이*/
         }
         return ssd;
     }
@@ -1580,35 +1590,34 @@ struct ssd_info *process(struct ssd_info *ssd)
     }
 
     time = ssd->current_time;
-    services_2_r_cmd_trans_and_complete(ssd);                                            /*处理当前状态是SR_R_C_A_TRANSFER或者当前状态是SR_COMPLETE，或者下一状态是SR_COMPLETE并且下一状态预计时间小于当前状态时间*/
+    services_2_r_cmd_trans_and_complete(ssd);                                            /*프로세스 현재 상태가 SR_R_C_A_TRANSFER이거나 현재 상태가 SR_COMPLETE이거나 다음 상태가 SR_COMPLETE이고 다음 상태 예상 시간이 현재 상태 시간보다 짧습니다.*/
 
-    random_num=ssd->program_count%ssd->parameter->channel_number;                        /*产生一个随机数，保证每次从不同的channel开始查询*/
+    random_num=ssd->program_count%ssd->parameter->channel_number;                        /*각 쿼리가 다른 채널에서 시작되도록 난수 생성*/
 
     /*****************************************
-     *循环处理所有channel上的读写子请求
-     *发读请求命令，传读写数据，都需要占用总线，
+     *모든 채널에서 읽기 및 쓰기 하위 요청을 주기적으로 처리하여 읽기 요청 명령을 보내고 읽기 및 쓰기 데이터를 전송하려면 모두 버스를 점유해야 합니다.
      ******************************************/
     for(chan=0;chan<ssd->parameter->channel_number;chan++)	     
     {
         i=(random_num+chan)%ssd->parameter->channel_number;
         flag=0;
-        flag_gc=0;                                                                       /*每次进入channel时，将gc的标志位置为0，默认认为没有进行gc操作*/
+        flag_gc=0;                                                                       /*채널에 들어갈 때마다 gc 플래그 위치를 0으로 설정하고 기본값은 gc 작업이 수행되지 않는 것입니다.*/
         if((ssd->channel_head[i].current_state==CHANNEL_IDLE)||(ssd->channel_head[i].next_state==CHANNEL_IDLE&&ssd->channel_head[i].next_state_predict_time<=ssd->current_time))		
         {   
-            if (ssd->gc_request>0)                                                       /*有gc操作，需要进行一定的判断*/
+            if (ssd->gc_request>0)                                                       /*특정 판단이 필요한 gc 작업이 있습니다.*/
             {
                 if (ssd->channel_head[i].gc_command!=NULL)
                 {
-                    flag_gc=gc(ssd,i,0);                                                 /*gc函数返回一个值，表示是否执行了gc操作，如果执行了gc操作，这个channel在这个时刻不能服务其他的请求*/
+                    flag_gc=gc(ssd,i,0);                                                 /*gc 함수는 gc 연산 수행 여부를 나타내는 값을 반환하며, gc 연산이 수행되면 현재 채널에서 다른 요청을 처리할 수 없습니다.*/
                 }
-                if (flag_gc==1)                                                          /*执行过gc操作，需要跳出此次循环*/
+                if (flag_gc==1)                                                          /*gc 작업을 수행한 후 이 루프에서 점프해야 합니다.*/
                 {
                     continue;
                 }
             }
 
-            sub=ssd->channel_head[i].subs_r_head;                                        /*先处理读请求*/
-            services_2_r_wait(ssd,i,&flag,&chg_cur_time_flag);                           /*处理处于等待状态的读子请求*/
+            sub=ssd->channel_head[i].subs_r_head;                                        /*먼저 읽기 요청 처리*/
+            services_2_r_wait(ssd,i,&flag,&chg_cur_time_flag);                           /*보류 중인 읽기 하위 요청 처리*/
 
             if((flag==0)&&(ssd->channel_head[i].subs_r_head!=NULL))                      /*if there are no new read request and data is ready in some dies, send these data to controller and response this request*/		
             {		     
@@ -1627,8 +1636,8 @@ struct ssd_info *process(struct ssd_info *ssd)
 }
 
 /****************************************************************************************************************************
- *当ssd支持高级命令时，这个函数的作用就是处理高级命令的写子请求
- *根据请求的个数，决定选择哪种高级命令（这个函数只处理写请求，读请求已经分配到每个channel，所以在执行时之间进行选取相应的命令）
+ *ssd가 고급 명령을 지원하는 경우 이 기능의 기능은 고급 명령의 쓰기 하위 요청을 처리하는 것입니다.
+ *요청 수에 따라 어떤 고급 명령을 선택할지 결정합니다(이 기능은 쓰기 요청만 처리하고 읽기 요청은 각 채널에 할당되므로 실행 사이에 해당 명령이 선택됨)
  *****************************************************************************************************************************/
 struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int channel,unsigned int chip)         
 {
@@ -1674,7 +1683,7 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
         }
     }
 
-    if ((ssd->parameter->allocation_scheme==0))                                           /*全动态分配，需要从ssd->subs_w_head上选取等待服务的子请求*/
+    if ((ssd->parameter->allocation_scheme==0))                                           /*완전 동적 할당, ssd->subs_w_head에서 제공 대기 중인 하위 요청을 선택해야 합니다.*/
     {
         if(ssd->parameter->dynamic_allocation==0)
         {
@@ -1702,7 +1711,7 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
             sub=sub->next_node;	
         }
 
-        if (subs_count==0)                                                               /*没有请求可以服务，返回NULL*/
+        if (subs_count==0)                                                               /*요청을 처리할 수 없습니다. NULL을 반환합니다.*/
         {
             for(i=0;i<max_sub_num;i++)
             {
@@ -1717,8 +1726,8 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
         if(subs_count>=2)
         {
             /*********************************************
-             *two plane,interleave都可以使用
-             *在这个channel上，选用interleave_two_plane执行
+             *평면과 인터리브를 모두 사용할 수 있습니다.
+             *이 채널에서 실행할 interleave_two_plane을 선택하십시오.
              **********************************************/
             if (((ssd->parameter->advanced_commands&AD_TWOPLANE)==AD_TWOPLANE)&&((ssd->parameter->advanced_commands&AD_INTERLEAVE)==AD_INTERLEAVE))     
             {                                                                        
@@ -1766,9 +1775,9 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
         }
 
     }//if ((ssd->parameter->allocation_scheme==0)) 
-    else                                                                                  /*静态分配方式，只需从这个特定的channel上选取等待服务的子请求*/
+    else                                                                                  /*정적 할당 방법, 이 특정 채널에서 제공되기를 기다리는 하위 요청을 선택하기만 하면 됩니다.*/
     {
-        /*在静态分配方式中，根据channel上的请求落在同一个die上的那些plane来确定使用什么命令*/
+        /*정적 할당 방법에서 사용할 명령은 채널에 대한 요청이 동일한 다이에 속하는 동일한 다이의 plane에 따라 결정됩니다.*/
 
         sub=ssd->channel_head[channel].subs_w_head;
         plane_bits=(unsigned int * )malloc((ssd->parameter->die_chip)*sizeof(unsigned int));
@@ -1803,7 +1812,7 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
             sub=sub->next_node;	
         }//while ((sub!=NULL)&&(subs_count<max_sub_num))
 
-        if (subs_count==0)                                                            /*没有请求可以服务，返回NULL*/
+        if (subs_count==0)                                                            /*요청을 처리할 수 없습니다. NULL을 반환합니다.*/
         {
             for(i=0;i<max_sub_num;i++)
             {
@@ -1818,9 +1827,9 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
         flag=0;
         if (ssd->parameter->advanced_commands!=0)
         {
-            if ((ssd->parameter->advanced_commands&AD_COPYBACK)==AD_COPYBACK)        /*全部高级命令都可以使用*/
+            if ((ssd->parameter->advanced_commands&AD_COPYBACK)==AD_COPYBACK)        /*모든 고급 명령을 사용할 수 있습니다.*/
             {
-                if (subs_count>1)                                                    /*有1个以上可以直接服务的写请求*/
+                if (subs_count>1)                                                    /*직접 처리할 수 있는 쓰기 요청이 1개 이상 있습니다.*/
                 {
                     get_ppn_for_advanced_commands(ssd,channel,chip,subs,subs_count,COPY_BACK);
                 } 
@@ -1837,9 +1846,9 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
                 }
 
             }// if ((ssd->parameter->advanced_commands&AD_COPYBACK)==AD_COPYBACK)
-            else                                                                     /*不能执行copyback*/
+            else                                                                     /*카피백을 실행할 수 없습니다*/
             {
-                if (subs_count>1)                                                    /*有1个以上可以直接服务的写请求*/
+                if (subs_count>1)                                                    /*직접 처리할 수 있는 쓰기 요청이 1개 이상 있습니다.*/
                 {
                     if (((ssd->parameter->advanced_commands&AD_INTERLEAVE)==AD_INTERLEAVE)&&((ssd->parameter->advanced_commands&AD_TWOPLANE)==AD_TWOPLANE))
                     {
@@ -2010,7 +2019,7 @@ struct ssd_info *dynamic_advanced_process(struct ssd_info *ssd,unsigned int chan
 }
 
 /****************************************
- *执行写子请求时，为普通的写子请求获取ppn
+ *쓰기 하위 요청을 실행할 때 일반 쓰기 하위 요청에 대해 ppn 가져오기
  *****************************************/
 Status get_ppn_for_normal_command(struct ssd_info * ssd, unsigned int channel,unsigned int chip, struct sub_request * sub)
 {
@@ -2052,6 +2061,13 @@ Status get_ppn_for_normal_command(struct ssd_info * ssd, unsigned int channel,un
  *的块没有用完，只能放在这，等待下次使用，同时修改查找空白page的方法，将以前首先寻找free块改为，只
  *要invalid block!=64即可。
  *except find aim page, we should modify token and decide gc operation
+
+ *고급 명령에 대한 ppn 가져오기
+ * 다른 명령에 따라 동일한 블록에 순차적 쓰기 요구 사항에 따라 쓸 수 있는 ppn을 선택하고 건너뛴 모든 ppn을 무효로 설정합니다.
+ *2평면 연산을 사용할 때 수평 위치가 같은 페이지를 찾기 위해서는 완전히 비어 있는 두 개의 블록을 직접 찾아야 할 수도 있습니다.
+ *블록은 사용되지 않았으며 여기에만 배치할 수 있으며 다음 사용을 기다리고 빈 페이지를 찾는 방법을 수정하고 빈 블록에 대한 이전 검색을 먼저 다음으로 변경합니다.
+ * invalid block != 64 조건이 충족되어야 함
+ * 목표 페이지 찾기를 제외하고 토큰을 수정하고 gc 작업을 결정해야 합니다.
  *************************************************************************************************/
 Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,unsigned int chip,struct sub_request * * subs ,unsigned int subs_count,unsigned int command)      
 {
@@ -2072,14 +2088,14 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
 
     max_subs_num=ssd->parameter->die_chip*ssd->parameter->plane_die;
 
-    if (ssd->parameter->allocation_scheme==DYNAMIC_ALLOCATION)                         /*动态分配操作*/ 
+    if (ssd->parameter->allocation_scheme==DYNAMIC_ALLOCATION)                         /*동적 할당 작업*/ 
     {
-        if((command==INTERLEAVE_TWO_PLANE)||(command==COPY_BACK))                      /*INTERLEAVE_TWO_PLANE以及COPY_BACK的情况*/
+        if((command==INTERLEAVE_TWO_PLANE)||(command==COPY_BACK))                      /*INTERLEAVE_TWO_PLANE 및 COPY_BACK*/
         {
             for(i=0;i<subs_count;i++)
             {
                 die=ssd->channel_head[channel].chip_head[chip].token;
-                if(i<ssd->parameter->die_chip)                                         /*为每个subs[i]获取ppn，i小于die_chip*/
+                if(i<ssd->parameter->die_chip)                                         /*각 subs[i]에 대해 ppn을 가져옵니다. i는 die_chip보다 작습니다.*/
                 {
                     plane=ssd->channel_head[channel].chip_head[chip].die_head[die].token;
                     get_ppn(ssd,channel,chip,die,plane,subs[i]);
@@ -2088,9 +2104,9 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
                 else                                                                  
                 {   
                     /*********************************************************************************************************************************
-                     *超过die_chip的i所指向的subs[i]与subs[i%ssd->parameter->die_chip]获取相同位置的ppn
-                     *如果成功的获取了则令multi_plane_flag=TRUE并执行compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE_TWO_PLANE);
-                     *否则执行compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE);
+                     *die_chip을 넘어 i가 가리키는 subs[i]와 subs[i%ssd->parameter->die_chip]은 같은 위치의 ppn을 얻습니다.
+                     *획득에 성공하면 multi_plane_flag=TRUE로 설정하고 compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE_TWO_PLANE)을 실행합니다.
+                     *그렇지 않으면 compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE)을 실행합니다.
                      ***********************************************************************************************************************************/
                     state=make_level_page(ssd,subs[i%ssd->parameter->die_chip],subs[i]);
                     if(state!=SUCCESS)                                                 
@@ -2110,7 +2126,7 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
             if(multi_plane_flag==TRUE)
             {
                 ssd->inter_mplane_count++;
-                compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE_TWO_PLANE);/*计算写子请求的处理时间，以写子请求的状态转变*/		
+                compute_serve_time(ssd,channel,chip,0,subs,valid_subs_count,INTERLEAVE_TWO_PLANE);/*쓰기 하위 요청의 상태 전환에 대한 쓰기 하위 요청의 처리 시간을 계산합니다.*/		
             }
             else
             {
@@ -2121,8 +2137,8 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
         else if(command==INTERLEAVE)
         {
             /***********************************************************************************************
-             *INTERLEAVE高级命令的处理，这个处理比TWO_PLANE高级命令的处理简单
-             *因为two_plane的要求是同一个die里面不同plane的同一位置的page，而interleave要求则是不同die里面的。
+             *TWO_PLANE 고급 명령의 처리보다 간단한 INTERLEAVE 고급 명령의 처리
+             *two_plane의 요구 사항은 동일한 다이에서 다른 평면의 동일한 위치에 있는 페이지이고 인터리브의 요구 사항은 다른 다이에 있기 때문입니다.
              ************************************************************************************************/
             for(i=0;(i<subs_count)&&(i<ssd->parameter->die_chip);i++)
             {
@@ -2148,10 +2164,10 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
             {
                 if(j==1)
                 {
-                    state=find_level_page(ssd,channel,chip,die,subs[0],subs[1]);        /*寻找与subs[0]的ppn位置相同的subs[1]，执行TWO_PLANE高级命令*/
+                    state=find_level_page(ssd,channel,chip,die,subs[0],subs[1]);        /*subs[0]과 ppn 위치가 같은 subs[1]을 찾아 TWO_PLANE 고급 명령을 실행합니다.*/
                     if(state!=SUCCESS)
                     {
-                        get_ppn_for_normal_command(ssd,channel,chip,subs[0]);           /*没找到，那么就当普通命令来处理*/
+                        get_ppn_for_normal_command(ssd,channel,chip,subs[0]);           /*찾을 수 없으면 일반 명령으로 처리하십시오.*/
                         return FAILURE;
                     }
                     else
@@ -2161,7 +2177,7 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
                 }
                 else if(j>1)
                 {
-                    state=make_level_page(ssd,subs[0],subs[j]);                         /*寻找与subs[0]的ppn位置相同的subs[j]，执行TWO_PLANE高级命令*/
+                    state=make_level_page(ssd,subs[0],subs[j]);                         /*subs[0]과 ppn 위치가 같은 subs[j]를 찾아 TWO_PLANE 고급 명령을 실행합니다.*/
                     if(state!=SUCCESS)
                     {
                         for(k=j;k<subs_count;k++)
@@ -2187,7 +2203,7 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
             return ERROR;
         }
     }//if (ssd->parameter->allocation_scheme==DYNAMIC_ALLOCATION)
-    else                                                                              /*静态分配的情况*/
+    else                                                                              /*정적 할당의 경우*/
     {
         if((command==INTERLEAVE_TWO_PLANE)||(command==COPY_BACK))
         {
@@ -2352,7 +2368,7 @@ Status get_ppn_for_advanced_commands(struct ssd_info *ssd,unsigned int channel,u
 
 
 /***********************************************
- *函数的作用是让sub0，sub1的ppn所在的page位置相同
+ *함수의 기능은 sub0과 sub1의 ppn이 위치한 페이지 위치를 동일하게 만드는 것입니다.
  ************************************************/
 Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct sub_request * sub1)
 {
@@ -2386,13 +2402,13 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
             plane1=ssd->channel_head[channel].chip_head[chip].die_head[die].token;
             if(ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane1].add_reg_ppn==-1)
             {
-                find_active_block(ssd,channel,chip,die,plane1);                               /*在plane1中找到活跃块*/
+                find_active_block(ssd,channel,chip,die,plane1);                               /*plane1에서 활성 블록 찾기*/
                 block1=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane1].active_block;
 
                 /*********************************************************************************************
-                 *只有找到的block1与block0相同，才能继续往下寻找相同的page
-                 *在寻找page时比较简单，直接用last_write_page（上一次写的page）+1就可以了。
-                 *如果找到的page不相同，那么如果ssd允许贪婪的使用高级命令，这样就可以让小的page 往大的page靠拢
+                 * 발견된 block1이 block0과 동일한 경우에만 동일한 페이지를 계속 검색할 수 있습니다.
+                 *페이지를 찾는 것은 비교적 간단합니다. last_write_page(작성된 마지막 페이지) +1을 사용하면 됩니다.
+                 *찾은 페이지가 같지 않으면 ssd가 고급 명령을 탐욕스럽게 사용하도록 허용하여 작은 페이지를 큰 페이지에 더 가깝게 이동할 수 있습니다.
                  *********************************************************************************************/
                 if(block1==block0)
                 {
@@ -2403,9 +2419,9 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
                     }
                     else if(page1<page0)
                     {
-                        if (ssd->parameter->greed_MPW_ad==1)                                  /*允许贪婪的使用高级命令*/
+                        if (ssd->parameter->greed_MPW_ad==1)                                  /*고급 명령을 탐욕스럽게 사용할 수 있습니다.*/
                         {                                                                   
-                            //make_same_level(ssd,channel,chip,die,plane1,active_block1,page0); /*小的page地址往大的page地址靠*/
+                            //make_same_level(ssd,channel,chip,die,plane1,active_block1,page0); /*작은 페이지 주소는 큰 페이지 주소에 의존*/
                             make_same_level(ssd,channel,chip,die,plane1,block1,page0);
                             break;
                         }    
@@ -2416,7 +2432,7 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
         }//for(i=0;i<ssd->parameter->plane_die;i++)
         if(i<ssd->parameter->plane_die)
         {
-            flash_page_state_modify(ssd,sub1,channel,chip,die,plane1,block1,page0);          /*这个函数的作用就是更新page1所对应的物理页以及location还有map表*/
+            flash_page_state_modify(ssd,sub1,channel,chip,die,plane1,block1,page0);          /*이 기능의 기능은 page1에 해당하는 물리적 페이지, 위치 및 맵 테이블을 업데이트하는 것입니다.*/
             //flash_page_state_modify(ssd,sub1,channel,chip,die,plane1,block1,page1);
             ssd->channel_head[channel].chip_head[chip].die_head[die].token=(plane1+1)%ssd->parameter->plane_die;
             return SUCCESS;
@@ -2427,7 +2443,7 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
             return FAILURE;
         }
     }
-    else                                                                                      /*静态分配的情况*/
+    else                                                                                      /*정적 할당의 경우*/
     {
         if((sub1->location==NULL)||(sub1->location->channel!=channel)||(sub1->location->chip!=chip)||(sub1->location->die!=die))
         {
@@ -2449,7 +2465,7 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
                 {
                     if (ssd->parameter->greed_MPW_ad==1)
                     { 
-                        //make_same_level(ssd,channel,chip,die,plane1,active_block1,page0);    /*小的page地址往大的page地址靠*/
+                        //make_same_level(ssd,channel,chip,die,plane1,active_block1,page0);    /*작은 페이지 주소는 큰 페이지 주소에 의존*/
                         make_same_level(ssd,channel,chip,die,plane1,block1,page0);
                         flash_page_state_modify(ssd,sub1,channel,chip,die,plane1,block1,page0);
                         //flash_page_state_modify(ssd,sub1,channel,chip,die,plane1,block1,page1);
@@ -2483,9 +2499,9 @@ Status make_level_page(struct ssd_info * ssd, struct sub_request * sub0,struct s
 }
 
 /******************************************************************************************************
- *函数的功能是为two plane命令寻找出两个相同水平位置的页，并且修改统计值，修改页的状态
- *注意这个函数与上一个函数make_level_page函数的区别，make_level_page这个函数是让sub1与sub0的page位置相同
- *而find_level_page函数的作用是在给定的channel，chip，die中找两个位置相同的subA和subB。
+ *이 기능의 기능은 두 평면 명령에 대해 수평 위치가 동일한 두 페이지를 찾아 통계 값을 수정하고 페이지의 상태를 수정하는 것입니다.
+ *이 함수와 이전 함수의 차이점에 유의하십시오. make_level_page 함수, make_level_page 함수는 sub1과 sub0의 페이지 위치를 동일하게 만드는 것입니다.
+ *find_level_page의 기능은 주어진 채널, 칩과 다이에서 같은 위치에 있는 두 개의 subA와 subB를 찾는 것입니다.
  *******************************************************************************************************/
 Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int chip,unsigned int die,struct sub_request *subA,struct sub_request *subB)       
 {
@@ -2495,9 +2511,9 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
     old_plane=ssd->channel_head[channel].chip_head[chip].die_head[die].token;
 
     /************************************************************
-     *在动态分配的情况下
-     *planeA赋初值为die的令牌，如果planeA是偶数那么planeB=planeA+1
-     *planeA是奇数，那么planeA+1变为偶数，再令planeB=planeA+1
+     *동적 할당의 경우
+     *planeA는 초기 값이 주사위인 토큰이 할당되고, planeA가 짝수이면 planeB=planeA+1
+     *평면A는 홀수이고,평면A+1은 짝수가 되고,평면B=평면A+1이 된다.
      *************************************************************/
     if (ssd->parameter->allocation_scheme==0)                                                
     {
@@ -2514,12 +2530,12 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
             ssd->channel_head[channel].chip_head[chip].die_head[die].token=(ssd->channel_head[channel].chip_head[chip].die_head[die].token+3)%ssd->parameter->plane_die;
         }
     } 
-    else                                                                                     /*静态分配的情况，就直接赋值给planeA和planeB*/
+    else                                                                                     /*정적 할당의 경우 평면A와 평면B에 직접 할당*/
     {
         planeA=subA->location->plane;
         planeB=subB->location->plane;
     }
-    find_active_block(ssd,channel,chip,die,planeA);                                          /*寻找active_block*/
+    find_active_block(ssd,channel,chip,die,planeA);                                          /*active_block을 찾아라*/
     find_active_block(ssd,channel,chip,die,planeB);
     active_blockA=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeA].active_block;
     active_blockB=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeB].active_block;
@@ -2527,26 +2543,26 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
 
 
     /*****************************************************
-     *如果active_block相同，那么就在这两个块中找相同的page
-     *或者使用贪婪的方法找到两个相同的page
+     *active_block이 같으면 이 두 블록에서 같은 페이지를 찾습니다.
+     * 또는 greedy 방법을 사용하여 두 개의 동일한 페이지 찾기
      ******************************************************/
     if (active_blockA==active_blockB)
     {
         pageA=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeA].blk_head[active_blockA].last_write_page+1;      
         pageB=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeB].blk_head[active_blockB].last_write_page+1;
-        if (pageA==pageB)                                                                    /*两个可用的页正好在同一个水平位置上*/
+        if (pageA==pageB)                                                                    /*사용 가능한 두 페이지가 정확히 동일한 수평 위치에 있습니다.*/
         {
             flash_page_state_modify(ssd,subA,channel,chip,die,planeA,active_blockA,pageA);
             flash_page_state_modify(ssd,subB,channel,chip,die,planeB,active_blockB,pageB);
         } 
         else
         {
-            if (ssd->parameter->greed_MPW_ad==1)                                             /*贪婪地使用高级命令*/
+            if (ssd->parameter->greed_MPW_ad==1)                                             /*고급 명령의 탐욕스러운 사용*/
             {
                 if (pageA<pageB)                                                            
                 {
                     aim_page=pageB;
-                    make_same_level(ssd,channel,chip,die,planeA,active_blockA,aim_page);     /*小的page地址往大的page地址靠*/
+                    make_same_level(ssd,channel,chip,die,planeA,active_blockA,aim_page);     /*작은 페이지 주소는 큰 페이지 주소에 의존*/
                 }
                 else
                 {
@@ -2556,7 +2572,7 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
                 flash_page_state_modify(ssd,subA,channel,chip,die,planeA,active_blockA,aim_page);
                 flash_page_state_modify(ssd,subB,channel,chip,die,planeB,active_blockB,aim_page);
             } 
-            else                                                                             /*不能贪婪的使用高级命令*/
+            else                                                                             /*고급 명령을 탐욕스럽게 사용하지 마십시오.*/
             {
                 subA=NULL;
                 subB=NULL;
@@ -2566,7 +2582,7 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
         }
     }
     /*********************************
-     *如果找到的两个active_block不相同
+     *발견된 두 개의 active_blocks가 동일하지 않은 경우
      **********************************/
     else
     {   
@@ -2574,12 +2590,12 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
         pageB=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeB].blk_head[active_blockB].last_write_page+1;
         if (pageA<pageB)
         {
-            if (ssd->parameter->greed_MPW_ad==1)                                             /*贪婪地使用高级命令*/
+            if (ssd->parameter->greed_MPW_ad==1)                                             /*고급 명령의 탐욕스러운 사용*/
             {
                 /*******************************************************************************
-                 *在planeA中，与active_blockB相同位置的的block中，与pageB相同位置的page是可用的。
-                 *也就是palneA中的相应水平位置是可用的，将其最为与planeB中对应的页。
-                 *那么可也让planeA，active_blockB中的page往pageB靠拢
+                 * planeA에서는 active_blockB와 같은 위치에 있는 블록에서 pageB와 같은 위치에 있는 페이지를 사용할 수 있습니다.
+                 * 즉, palneA에서 해당 수평 위치가 가능하며, planeB에서 가장 해당 페이지입니다.
+                 * 그런 다음 planeA 및 active_blockB의 페이지를 pageB에 더 가깝게 이동할 수도 있습니다.
                  ********************************************************************************/
                 if (ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeA].blk_head[active_blockB].page_head[pageB].free_state==PG_SUB)    
                 {
@@ -2588,8 +2604,8 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
                     flash_page_state_modify(ssd,subB,channel,chip,die,planeB,active_blockB,pageB);
                 }
                 /********************************************************************************
-                 *在planeA中，与active_blockB相同位置的的block中，与pageB相同位置的page是可用的。
-                 *那么就要重新寻找block，需要重新找水平位置相同的一对页
+                 * planeA에서는 active_blockB와 같은 위치에 있는 블록에서 pageB와 같은 위치에 있는 페이지를 사용할 수 있습니다.
+                 *그런 다음 블록을 다시 찾아야 합니다. 수평 위치가 동일한 한 쌍의 페이지를 다시 찾아야 합니다.
                  *********************************************************************************/
                 else    
                 {
@@ -2698,9 +2714,9 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
                 if ((pageA==pageB)&&(pageA==0))
                 {
                     /*******************************************************************************************
-                     *下面是两种情况
-                     *1，planeA，planeB中的active_blockA，pageA位置都可用，那么不同plane 的相同位置，以blockA为准
-                     *2，planeA，planeB中的active_blockB，pageA位置都可用，那么不同plane 的相同位置，以blockB为准
+                     *다음은 2가지 경우입니다.
+                     *1, planeA 및 planeB의 active_blockA 및 pageA 위치는 모두 사용 가능하며, 다른 평면의 동일한 위치는 blockA의 적용을 받습니다.
+                     *2, planeA 및 planeB의 active_blockB 및 pageA 위치는 모두 사용 가능하며, 다른 평면의 동일한 위치는 blockB의 적용을 받습니다.
                      ********************************************************************************************/
                     if ((ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeA].blk_head[active_blockA].page_head[pageA].free_state==PG_SUB)
                             &&(ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[planeB].blk_head[active_blockA].page_head[pageA].free_state==PG_SUB))
@@ -2774,7 +2790,7 @@ Status find_level_page(struct ssd_info *ssd,unsigned int channel,unsigned int ch
 }
 
 /*
- *函数的功能是修改找到的page页的状态以及相应的dram中映射表的值
+ *함수의 기능은 찾은 페이지의 상태와 해당 드램의 매핑 테이블 값을 수정하는 것입니다.
  */
 struct ssd_info *flash_page_state_modify(struct ssd_info *ssd,struct sub_request *sub,unsigned int channel,unsigned int chip,unsigned int die,unsigned int plane,unsigned int block,unsigned int page)
 {
@@ -2797,7 +2813,7 @@ struct ssd_info *flash_page_state_modify(struct ssd_info *ssd,struct sub_request
         ssd->dram->map->map_entry[sub->lpn].pn=find_ppn(ssd,channel,chip,die,plane,block,page);
         ssd->dram->map->map_entry[sub->lpn].state=sub->state;
     }
-    else                                                                                      /*这个逻辑页进行了更新，需要将原来的页置为失效*/
+    else                                                                                      /*이 논리적 페이지가 업데이트되었으며 원본 페이지를 무효화해야 합니다.*/
     {
         ppn=ssd->dram->map->map_entry[sub->lpn].pn;
         location=find_location(ssd,ppn);
@@ -2852,19 +2868,19 @@ struct ssd_info *flash_page_state_modify(struct ssd_info *ssd,struct sub_request
 
 
 /********************************************
- *函数的功能就是让两个位置不同的page位置相同
+ *기능의 기능은 위치가 다른 두 페이지를 동일한 위치로 만드는 것입니다.
  *********************************************/
 struct ssd_info *make_same_level(struct ssd_info *ssd,unsigned int channel,unsigned int chip,unsigned int die,unsigned int plane,unsigned int block,unsigned int aim_page)
 {
     int i=0,step,page;
     struct direct_erase *new_direct_erase,*direct_erase_node;
 
-    page=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].last_write_page+1;                  /*需要调整的当前块的可写页号*/
+    page=ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].last_write_page+1;                  /*조정해야 하는 현재 블록의 쓰기 가능한 페이지 번호*/
     step=aim_page-page;
     while (i<step)
     {
-        ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].page_head[page+i].valid_state=0;     /*表示某一页失效，同时标记valid和free状态都为0*/
-        ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].page_head[page+i].free_state=0;      /*表示某一页失效，同时标记valid和free状态都为0*/
+        ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].page_head[page+i].valid_state=0;     /*페이지가 유효하지 않으며 유효 및 자유 상태가 모두 0으로 표시됨을 나타냅니다.*/
+        ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].page_head[page+i].free_state=0;      /*페이지가 유효하지 않으며 유효 및 자유 상태가 모두 0으로 표시됨을 나타냅니다.*/
         ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].page_head[page+i].lpn=0;
 
         ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].invalid_page_num++;
@@ -2880,7 +2896,7 @@ struct ssd_info *make_same_level(struct ssd_info *ssd,unsigned int channel,unsig
 
     ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].last_write_page=aim_page-1;
 
-    if (ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].invalid_page_num==ssd->parameter->page_block)    /*该block中全是invalid的页，可以直接删除*/
+    if (ssd->channel_head[channel].chip_head[chip].die_head[die].plane_head[plane].blk_head[block].invalid_page_num==ssd->parameter->page_block)    /*이 블록의 모든 페이지는 유효하지 않으며 직접 삭제할 수 있습니다.*/
     {
         new_direct_erase=(struct direct_erase *)malloc(sizeof(struct direct_erase));
         alloc_assert(new_direct_erase,"new_direct_erase");
@@ -2909,8 +2925,8 @@ struct ssd_info *make_same_level(struct ssd_info *ssd,unsigned int channel,unsig
 
 
 /****************************************************************************
- *在处理高级命令的写子请求时，这个函数的功能就是计算处理时间以及处理的状态转变
- *功能还不是很完善，需要完善，修改时注意要分为静态分配和动态分配两种情况
+ * 고급 명령의 쓰기 서브 요청을 처리할 때 이 기능의 기능은 처리 시간과 처리 상태 전이를 계산하는 것입니다.
+ *기능이 완벽하지 않아 개선이 필요하며 수정시에는 정적할당과 동적할당으로 나누어야 한다.
  *****************************************************************************/
 struct ssd_info *compute_serve_time(struct ssd_info *ssd,unsigned int channel,unsigned int chip,unsigned int die,struct sub_request **subs, unsigned int subs_count,unsigned int command)
 {
@@ -3046,15 +3062,15 @@ struct ssd_info *compute_serve_time(struct ssd_info *ssd,unsigned int channel,un
 
 
 /*****************************************************************************************
- *函数的功能就是把子请求从ssd->subs_w_head或者ssd->channel_head[channel].subs_w_head上删除
+ *함수의 기능은 ssd->subs_w_head 또는 ssd->channel_head[채널].subs_w_head에서 하위 요청을 삭제하는 것입니다.
  ******************************************************************************************/
 struct ssd_info *delete_from_channel(struct ssd_info *ssd,unsigned int channel,struct sub_request * sub_req)
 {
     struct sub_request *sub,*p;
 
     /******************************************************************
-     *完全动态分配子请求就在ssd->subs_w_head上
-     *不是完全动态分配子请求就在ssd->channel_head[channel].subs_w_head上
+     * 완전히 동적으로 할당된 하위 요청은 ssd->subs_w_head에 있습니다.
+     *ssd->channel_head[channel].subs_w_head에서 완전히 동적으로 할당되지 않은 하위 요청
      *******************************************************************/
     if ((ssd->parameter->allocation_scheme==0)&&(ssd->parameter->dynamic_allocation==0))    
     {
@@ -3077,7 +3093,7 @@ struct ssd_info *delete_from_channel(struct ssd_info *ssd,unsigned int channel,s
                     ssd->real_time_subreq--;
                 }
 
-                if (sub==ssd->subs_w_head)                                                     /*将这个子请求从sub request队列中删除*/
+                if (sub==ssd->subs_w_head)                                                     /*하위 요청 대기열에서 이 하위 요청을 제거합니다.*/
                 {
                     if (ssd->subs_w_head!=ssd->subs_w_tail)
                     {
@@ -3111,7 +3127,7 @@ struct ssd_info *delete_from_channel(struct ssd_info *ssd,unsigned int channel,s
             }//if ((ssd->parameter->allocation_scheme==0)&&(ssd->parameter->dynamic_allocation==0)) 
             else
             {
-                if (sub==ssd->channel_head[channel].subs_w_head)                               /*将这个子请求从channel队列中删除*/
+                if (sub==ssd->channel_head[channel].subs_w_head)                               /*채널 대기열에서 이 하위 요청을 제거합니다.*/
                 {
                     if (ssd->channel_head[channel].subs_w_head!=ssd->channel_head[channel].subs_w_tail)
                     {
@@ -3157,11 +3173,11 @@ struct ssd_info *un_greed_interleave_copyback(struct ssd_info *ssd,unsigned int 
     unsigned int old_ppn1,ppn1,old_ppn2,ppn2,greed_flag=0;
 
     old_ppn1=ssd->dram->map->map_entry[sub1->lpn].pn;
-    get_ppn(ssd,channel,chip,die,sub1->location->plane,sub1);                                  /*找出来的ppn一定是发生在与子请求相同的plane中,才能使用copyback操作*/
+    get_ppn(ssd,channel,chip,die,sub1->location->plane,sub1);                                  /*발견된 ppn은 카피백 작업을 사용하기 전에 하위 요청과 동일한 평면에서 발생해야 합니다.*/
     ppn1=sub1->ppn;
 
     old_ppn2=ssd->dram->map->map_entry[sub2->lpn].pn;
-    get_ppn(ssd,channel,chip,die,sub2->location->plane,sub2);                                  /*找出来的ppn一定是发生在与子请求相同的plane中,才能使用copyback操作*/
+    get_ppn(ssd,channel,chip,die,sub2->location->plane,sub2);                                  /*발견된 ppn은 카피백 작업을 사용하기 전에 하위 요청과 동일한 평면에서 발생해야 합니다.*/
     ppn2=sub2->ppn;
 
     if ((old_ppn1%2==ppn1%2)&&(old_ppn2%2==ppn2%2))
@@ -3272,7 +3288,7 @@ struct ssd_info *un_greed_copyback(struct ssd_info *ssd,unsigned int channel,uns
     unsigned int old_ppn,ppn;
 
     old_ppn=ssd->dram->map->map_entry[sub1->lpn].pn;
-    get_ppn(ssd,channel,chip,die,0,sub1);                                                     /*找出来的ppn一定是发生在与子请求相同的plane中,才能使用copyback操作*/
+    get_ppn(ssd,channel,chip,die,0,sub1);                                                     /*발견된 ppn은 카피백 작업을 사용하기 전에 하위 요청과 동일한 평면에서 발생해야 합니다.*/
     ppn=sub1->ppn;
 
     if (old_ppn%2==ppn%2)
@@ -3320,8 +3336,8 @@ struct ssd_info *un_greed_copyback(struct ssd_info *ssd,unsigned int channel,uns
 
 
 /****************************************************************************************
- *函数的功能是在处理读子请求的高级命令时，需要找与one_page相匹配的另外一个page即two_page
- *没有找到可以和one_page执行two plane或者interleave操作的页,需要将one_page向后移一个节点
+ * 함수의 기능은 읽기 하위 요청의 고급 명령을 처리할 때 one_page와 일치하는 다른 페이지, 즉 two_page를 찾는 것입니다.
+ *one_page로 투 플레인 또는 인터리브 작업을 수행할 수 있는 페이지를 찾을 수 없습니다. one_page를 한 노드 뒤로 이동해야 합니다.
  *****************************************************************************************/
 struct sub_request *find_interleave_twoplane_page(struct ssd_info *ssd, struct sub_request *one_page,unsigned int command)
 {
@@ -3347,7 +3363,7 @@ struct sub_request *find_interleave_twoplane_page(struct ssd_info *ssd, struct s
                 {
                     if (one_page->location->plane!=two_page->location->plane)
                     {
-                        return two_page;                                                       /*找到了与one_page可以执行two plane操作的页*/
+                        return two_page;                                                       /*one_page로 두 개의 평면 작업을 수행할 수 있는 페이지를 찾았습니다.*/
                     }
                     else
                     {
@@ -3359,7 +3375,7 @@ struct sub_request *find_interleave_twoplane_page(struct ssd_info *ssd, struct s
                     two_page=two_page->next_node;
                 }
             }//while (two_page!=NULL)
-            if (two_page==NULL)                                                               /*没有找到可以和one_page执行two_plane操作的页,需要将one_page向后移一个节点*/
+            if (two_page==NULL)                                                               /*one_page로 two_plane 작업을 수행할 수 있는 페이지를 찾을 수 없습니다. one_page를 한 노드 뒤로 이동해야 합니다.*/
             {
                 return NULL;
             }
@@ -3374,14 +3390,14 @@ struct sub_request *find_interleave_twoplane_page(struct ssd_info *ssd, struct s
                 }
                 else if ((one_page->location->chip==two_page->location->chip)&&(one_page->location->die!=two_page->location->die))
                 {
-                    return two_page;                                                           /*找到了与one_page可以执行interleave操作的页*/
+                    return two_page;                                                           /*one_page로 인터리브 작업을 수행할 수 있는 페이지를 찾았습니다.*/
                 }
                 else
                 {
                     two_page=two_page->next_node;
                 }
             }
-            if (two_page==NULL)                                                                /*没有找到可以和one_page执行interleave操作的页,需要将one_page向后移一个节点*/
+            if (two_page==NULL)                                                                /*one_page와 interleave 작업을 수행할 수 있는 페이지가 없습니다. one_page를 한 노드 뒤로 이동해야 합니다.*/
             {
                 return NULL;
             }//while (two_page!=NULL)
@@ -3395,19 +3411,19 @@ struct sub_request *find_interleave_twoplane_page(struct ssd_info *ssd, struct s
 
 
 /*************************************************************************
- *在处理读子请求高级命令时，利用这个还是查找可以执行高级命令的sub_request
+ *read sub-request 고급 명령을 처리할 때 이를 사용하여 고급 명령을 실행할 수 있는 sub_request를 찾습니다.
  **************************************************************************/
 int find_interleave_twoplane_sub_request(struct ssd_info * ssd, unsigned int channel,struct sub_request * sub_request_one,struct sub_request * sub_request_two,unsigned int command)
 {
     sub_request_one=ssd->channel_head[channel].subs_r_head;
     while (sub_request_one!=NULL)
     {
-        sub_request_two=find_interleave_twoplane_page(ssd,sub_request_one,command);                /*找出两个可以做two_plane或者interleave的read子请求，包括位置条件和时间条件*/
+        sub_request_two=find_interleave_twoplane_page(ssd,sub_request_one,command);                /*위치 조건 및 시간 조건을 포함하여 two_plane 또는 인터리브를 수행할 수 있는 두 개의 읽기 하위 요청 찾기*/
         if (sub_request_two==NULL)
         {
             sub_request_one=sub_request_one->next_node;
         }
-        else if (sub_request_two!=NULL)                                                            /*找到了两个可以执行two plane操作的页*/
+        else if (sub_request_two!=NULL)                                                            /*two plane 작업을 수행할 수 있는 두 페이지를 찾았습니다.*/
         {
             break;
         }
@@ -3416,7 +3432,7 @@ int find_interleave_twoplane_sub_request(struct ssd_info * ssd, unsigned int cha
     if (sub_request_two!=NULL)
     {
         if (ssd->request_queue!=ssd->request_tail)      
-        {                                                                                         /*确保interleave read的子请求是第一个请求的子请求*/
+        {                                                                                         /*interleave read의 하위 요청이 첫 번째 요청의 하위 요청인지 확인합니다.*/
             if ((ssd->request_queue->lsn-ssd->parameter->subpage_page)<(sub_request_one->lpn*ssd->parameter->subpage_page))  
             {
                 if ((ssd->request_queue->lsn+ssd->request_queue->size+ssd->parameter->subpage_page)>(sub_request_one->lpn*ssd->parameter->subpage_page))
@@ -3447,8 +3463,8 @@ int find_interleave_twoplane_sub_request(struct ssd_info * ssd, unsigned int cha
 
 
 /**************************************************************************
- *这个函数非常重要，读子请求的状态转变，以及时间的计算都通过这个函数来处理
- *还有写子请求的执行普通命令时的状态，以及时间的计算也是通过这个函数来处理的
+ *이 기능은 매우 중요하며 읽기 서브 요청의 상태 천이와 시간 계산은 모두 이 기능에 의해 처리됩니다.
+ * 일반 명령어 실행시 서브요청을 쓰는 상태도 있고, 시간 계산도 이 함수로 처리합니다.
  ****************************************************************************/
 Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_request *sub2, unsigned int aim_state,unsigned int command)
 {
@@ -3464,8 +3480,8 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
     }
 
     /***************************************************************************************************
-     *处理普通命令时，读子请求的目标状态分为以下几种情况SR_R_READ，SR_R_C_A_TRANSFER，SR_R_DATA_TRANSFER
-     *写子请求的目标状态只有SR_W_TRANSFER
+     *일반 명령을 처리할 때 읽기 하위 요청의 대상 상태는 SR_R_READ, SR_R_C_A_TRANSFER, SR_R_DATA_TRANSFER의 경우로 나뉩니다.
+     * 쓰기 하위 요청의 대상 상태는 SR_W_TRANSFER입니다.
      ****************************************************************************************************/
     if(command==NORMAL)
     {
@@ -3476,8 +3492,8 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
             case SR_R_READ:
                 {   
                     /*****************************************************************************************************
-                     *这个目标状态是指flash处于读数据的状态，sub的下一状态就应该是传送数据SR_R_DATA_TRANSFER
-                     *这时与channel无关，只与chip有关所以要修改chip的状态为CHIP_READ_BUSY，下一个状态就是CHIP_DATA_TRANSFER
+                     *이 목표 상태는 플래시가 데이터를 읽고 있는 상태임을 의미하며, 서브의 다음 상태는 데이터 SR_R_DATA_TRANSFER를 전송해야 함을 의미합니다.
+                     *이때 채널과는 아무런 관련이 없고 칩만 있으므로 칩의 상태를 CHIP_READ_BUSY로 수정해야 하며 다음 상태는 CHIP_DATA_TRANSFER
                      ******************************************************************************************************/
                     sub->current_time=ssd->current_time;
                     sub->current_state=SR_R_READ;
@@ -3494,9 +3510,9 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
             case SR_R_C_A_TRANSFER:
                 {   
                     /*******************************************************************************************************
-                     *目标状态是命令地址传输时，sub的下一个状态就是SR_R_READ
-                     *这个状态与channel，chip有关，所以要修改channel，chip的状态分别为CHANNEL_C_A_TRANSFER，CHIP_C_A_TRANSFER
-                     *下一状态分别为CHANNEL_IDLE，CHIP_READ_BUSY
+                     *대상 상태가 명령 주소 전송일 때 서브의 다음 상태는 SR_R_READ
+                     *이 상태는 채널 및 칩과 관련이 있으므로 채널을 수정하기 위해 칩의 상태는 각각 CHANNEL_C_A_TRANSFER, CHIP_C_A_TRANSFER입니다.
+                     *다음 상태는 CHANNEL_IDLE, CHIP_READ_BUSY입니다.
                      *******************************************************************************************************/
                     sub->current_time=ssd->current_time;									
                     sub->current_state=SR_R_C_A_TRANSFER;									
@@ -3523,9 +3539,9 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
             case SR_R_DATA_TRANSFER:
                 {   
                     /**************************************************************************************************************
-                     *目标状态是数据传输时，sub的下一个状态就是完成状态SR_COMPLETE
-                     *这个状态的处理也与channel，chip有关，所以channel，chip的当前状态变为CHANNEL_DATA_TRANSFER，CHIP_DATA_TRANSFER
-                     *下一个状态分别为CHANNEL_IDLE，CHIP_IDLE。
+                     *목표 상태가 데이터 전송일 때, 서브의 다음 상태는 완료 상태 SR_COMPLETE
+                     *이 상태의 처리는 채널 및 칩과도 관련이 있으므로 채널 및 칩의 현재 상태는 CHANNEL_DATA_TRANSFER, CHIP_DATA_TRANSFER가 됩니다.
+                     *다음 상태는 각각 CHANNEL_IDLE, CHIP_IDLE입니다.
                      ***************************************************************************************************************/
                     sub->current_time=ssd->current_time;					
                     sub->current_state=SR_R_DATA_TRANSFER;		
@@ -3550,11 +3566,11 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
             case SR_W_TRANSFER:
                 {
                     /******************************************************************************************************
-                     *这是处理写子请求时，状态的转变以及时间的计算
-                     *虽然写子请求的处理状态也像读子请求那么多，但是写请求都是从上往plane中传输数据
-                     *这样就可以把几个状态当一个状态来处理，就当成SR_W_TRANSFER这个状态来处理，sub的下一个状态就是完成状态了
-                     *此时channel，chip的当前状态变为CHANNEL_TRANSFER，CHIP_WRITE_BUSY
-                     *下一个状态变为CHANNEL_IDLE，CHIP_IDLE
+                     * 쓰기 서브 요청 처리 시 상태 천이 및 시간 계산입니다.
+                     * 쓰기 요청의 처리 상태는 읽기 하위 요청과 동일하지만 쓰기 요청은 데이터를 상단에서 평면으로 전송합니다.
+                     *이와 같이 여러 상태를 하나의 상태로 취급할 수 있으며, 이는 SR_W_TRANSFER 상태로 처리되며, 서브의 다음 상태는 완료 상태입니다.
+                     *이때 채널과 칩의 현재 상태는 CHANNEL_TRANSFER, CHIP_WRITE_BUSY가 됩니다.
+                     *다음 상태는 CHANNEL_IDLE, CHIP_IDLE이 됩니다.
                      *******************************************************************************************************/
                     sub->current_time=ssd->current_time;
                     sub->current_state=SR_W_TRANSFER;
@@ -3582,9 +3598,9 @@ Status go_one_step(struct ssd_info * ssd, struct sub_request * sub1,struct sub_r
     else if(command==TWO_PLANE)
     {   
         /**********************************************************************************************
-         *高级命令TWO_PLANE的处理，这里的TWO_PLANE高级命令是读子请求的高级命令
-         *状态转变与普通命令一样，不同的是在SR_R_C_A_TRANSFER时计算时间是串行的，因为共用一个通道channel
-         *还有SR_R_DATA_TRANSFER也是共用一个通道
+         * TWO_PLANE 고급 명령이 하위 요청을 읽기 위한 고급 명령인 고급 명령 TWO_PLANE의 처리
+         *상태 전환은 일반 명령과 동일하지만 SR_R_C_A_TRANSFER에서는 채널 채널을 공유하기 때문에 계산 시간이 직렬이라는 차이점이 있습니다.
+         *그리고 SR_R_DATA_TRANSFER도 채널을 공유합니다.
          **********************************************************************************************/
         if((sub1==NULL)||(sub2==NULL))
         {

@@ -21,11 +21,19 @@ Hao Luo         2011/01/01        2.0           Change               luohao13568
 #include "ssd.h"
 
 /********************************************************************************************************************************
-  1，main函数中initiatio()函数用来初始化ssd,；2，make_aged()函数使SSD成为aged，aged的ssd相当于使用过一段时间的ssd，里面有失效页，
+  1，main函数中initiation()函数用来初始化ssd,；2，make_aged()函数使SSD成为aged，aged的ssd相当于使用过一段时间的ssd，里面有失效页，
   non_aged的ssd是新的ssd，无失效页，失效页的比例可以在初始化参数中设置；3，pre_process_page()函数提前扫一遍读请求，把读请求
   的lpn<--->ppn映射关系事先建立好，写请求的lpn<--->ppn映射关系在写的时候再建立，预处理trace防止读请求是读不到数据；4，simulate()是
   核心处理函数，trace文件从读进来到处理完成都由这个函数来完成；5，statistic_output()函数将ssd结构中的信息输出到输出文件，输出的是
   统计数据和平均数据，输出文件较小，trace_output文件则很大很详细；6，free_all_node()函数释放整个main函数中申请的节点
+
+  1. main 함수의 initialization() 함수는 SSD를 초기화하는 데 사용됩니다. 2. make_aged() 함수는 SSD를 노화시킵니다.
+  노화된 SSD는 일정 기간 동안 사용한 SSD에 해당하며, 유효하지 않은 페이지입니다. non_aged ssd는 유효하지 않은 페이지가 없는 새 ssd입니다.
+  유효하지 않은 페이지의 비율은 초기화 매개변수에서 설정할 수 있습니다. 3. pre_process_page() 함수는 읽기 요청을 미리 스캔하고 읽기 요청을 저장합니다.
+  lpn<--->ppn 매핑 관계를 미리 설정하고 쓰기 요청의 lpn<--->ppn 매핑 관계를 쓰기 시점에 설정하여 읽기 요청이 할 수 없는 것을 방지하기 위해
+  트레이스를 전처리합니다. 데이터 읽기, 4, 시뮬레이트() 예) 핵심 처리 함수인 추적 파일은 이 함수에 의해 읽혀지고 처리됩니다.
+  5. statistic_output() 함수는 ssd 구조의 정보를 출력 파일에 출력하고 출력은 다음과 같습니다.
+  통계 데이터 및 평균 데이터, 출력 파일은 작고 trace_output 파일은 크고 상세함 6. free_all_node() 함수는 전체 메인 함수에서 적용된 노드를 해제
  *********************************************************************************************************************************/
 int  main()
 {
@@ -70,11 +78,11 @@ int  main()
 
 
 /******************simulate() *********************************************************************
- *simulate()是核心处理函数，主要实现的功能包括
- *1,从trace文件中获取一条请求，挂到ssd->request
- *2，根据ssd是否有dram分别处理读出来的请求，把这些请求处理成为读写子请求，挂到ssd->channel或者ssd上
- *3，按照事件的先后来处理这些读写子请求。
- *4，输出每条请求的子请求都处理完后的相关信息到outputfile文件中
+ *simulate()는 핵심 처리 기능이며 주요 기능은 다음과 같습니다.
+ *1, 추적 파일에서 요청을 받아 ssd->request에 매달아 두십시오.
+ *2, ssd에 읽기 요청을 별도로 처리하는 dram이 있는지 여부에 따라 이러한 요청을 읽기 및 쓰기 하위 요청으로 처리하고 ssd->channel 또는 ssd에 중단
+ *3, 이러한 읽기 및 쓰기 하위 요청은 이벤트의 순서에 따라 처리됩니다.
+ *4, 각 요청의 하위 요청을 출력 파일 파일로 처리한 후 관련 정보를 출력합니다.
  **************************************************************************************************/
 struct ssd_info *simulate(struct ssd_info *ssd)
 {
@@ -131,15 +139,15 @@ struct ssd_info *simulate(struct ssd_info *ssd)
 
 
 /********    get_request    ******************************************************
- *	1.get requests that arrived already
- *	2.add those request node to ssd->reuqest_queue
- *	return	0: reach the end of the trace
- *			-1: no request has been added
- *			1: add one request to list
- *SSD模拟器有三种驱动方式:时钟驱动(精确，太慢) 事件驱动(本程序采用) trace驱动()，
- *两种方式推进事件：channel/chip状态改变、trace文件请求达到。
- *channel/chip状态改变和trace文件请求到达是散布在时间轴上的点，每次从当前状态到达
- *下一个状态都要到达最近的一个状态，每到达一个点执行一次process
+ * 1. 이미 도착한 요청 가져오기
+ * 2. 해당 요청 노드를 ssd->reuqest_queue에 추가합니다.
+ * return 0: 추적 끝에 도달
+ * -1: 추가된 요청이 없습니다.
+ * 1: 목록에 하나의 요청 추가
+ *SSD 시뮬레이터에는 세 가지 드라이브 모드가 있습니다. 클럭 드라이브(정확함, 너무 느림) 이벤트 드라이브(이 프로그램에서 사용) 트레이스 드라이브(),
+ *이벤트를 진행하는 두 가지 방법: 채널/칩 상태 변경, 추적 파일 요청 도착.
+ *채널/칩 상태 변경 및 추적 파일 요청 도착은 현재 상태에서 도착할 때마다 타임라인에 흩어져 있는 지점입니다.
+ *다음 상태는 가장 가까운 상태에 도달해야 하며, 한 지점에 도달할 때마다 프로세스를 실행합니다.
  ********************************************************************************/
 int get_requests(struct ssd_info *ssd)  
 {  
@@ -172,10 +180,10 @@ int get_requests(struct ssd_info *ssd)
     if (lsn>ssd->max_lsn)
         ssd->max_lsn=lsn;
     /******************************************************************************************************
-     *上层文件系统发送给SSD的任何读写命令包括两个部分（LSN，size） LSN是逻辑扇区号，对于文件系统而言，它所看到的存
-     *储空间是一个线性的连续空间。例如，读请求（260，6）表示的是需要读取从扇区号为260的逻辑扇区开始，总共6个扇区。
-     *large_lsn: channel下面有多少个subpage，即多少个sector。overprovide系数：SSD中并不是所有的空间都可以给用户使用，
-     *比如32G的SSD可能有10%的空间保留下来留作他用，所以乘以1-provide
+     *상위 파일 시스템에서 SSD로 보내는 모든 읽기 및 쓰기 명령에는 두 부분(LSN, 크기)이 포함됩니다. LSN은 논리 섹터 번호입니다.
+     *저장 공간은 선형 연속 공간입니다. 예를 들어, 읽기 요청(260, 6)은 섹터 번호 260부터 시작하여 총 6개의 섹터인 논리 섹터를 읽어야 함을 나타냅니다.
+     *large_lsn: 채널 아래에 있는 서브페이지 수, 즉 섹터 수. 초과 제공 계수: SSD의 모든 공간을 사용자가 사용할 수 있는 것은 아닙니다.
+     *예를 들어, 32G SSD에는 다른 용도로 10%의 공간이 예약되어 있을 수 있으므로 1을 곱하십시오.
      ***********************************************************************************************************/
     large_lsn=(int)((ssd->parameter->subpage_page*ssd->parameter->page_block*ssd->parameter->block_plane*ssd->parameter->plane_die*ssd->parameter->die_chip*ssd->parameter->chip_num)*(1-ssd->parameter->overprovide));
     lsn = lsn%large_lsn;
@@ -195,12 +203,12 @@ int get_requests(struct ssd_info *ssd)
         if(nearest_event_time<time_t)
         {
             /*******************************************************************************
-             *回滚，即如果没有把time_t赋给ssd->current_time，则trace文件已读的一条记录回滚
-             *filepoint记录了执行fgets之前的文件指针位置，回滚到文件头+filepoint处
-             *int fseek(FILE *stream, long offset, int fromwhere);函数设置文件指针stream的位置。
-             *如果执行成功，stream将指向以fromwhere（偏移起始位置：文件头0，当前位置1，文件尾2）为基准，
-             *偏移offset（指针偏移量）个字节的位置。如果执行失败(比如offset超过文件自身大小)，则不改变stream指向的位置。
-             *文本文件只能采用文件头0的定位方式，本程序中打开文件方式是"r":以只读方式打开文本文件	
+             *Rollback 즉, ssd->current_time에 time_t가 할당되지 않은 경우 추적 파일에서 읽은 레코드가 롤백됩니다.
+             *filepoint는 fgets를 실행하기 전에 파일 포인터 위치를 기록하고 파일 헤더 + filepoint로 롤백합니다.
+             *int fseek(FILE *stream, long offset, int fromwhere); 이 함수는 파일 포인터 스트림의 위치를 ​​설정합니다.
+             * 실행이 성공하면 스트림은 fromwhere(오프셋 시작 위치: 파일 헤드 0, 현재 위치 1, 파일 테일 2)를 참조로 가리키고,
+             * 오프셋(포인터 오프셋) 바이트에서의 위치. 오프셋이 파일 자체의 크기를 초과하는 것과 같이 실행이 실패하면 스트림이 가리키는 위치가 변경되지 않습니다.
+             *텍스트 파일은 파일 헤더 0의 위치 지정 방법만 사용할 수 있습니다. 이 프로그램에서 파일 열기 방법은 "r"입니다. 텍스트 파일을 읽기 전용 모드로 엽니다.
              **********************************************************************************/
             fseek(ssd->tracefile,filepoint,0); 
             if(ssd->current_time<=nearest_event_time)
@@ -265,7 +273,7 @@ int get_requests(struct ssd_info *ssd)
         ssd->request_queue_length++;
     }
 
-    if (request1->operation==1)             //计算平均请求大小 1为读 0为写
+    if (request1->operation==1)             //쓰기에 대한 읽기 0에 대한 평균 요청 크기 1 계산
     {
         ssd->ave_read_size=(ssd->ave_read_size*ssd->read_request_count+request1->size)/(ssd->read_request_count+1);
     } 
@@ -276,7 +284,7 @@ int get_requests(struct ssd_info *ssd)
 
 
     filepoint = ftell(ssd->tracefile);	
-    fgets(buffer, 200, ssd->tracefile);    //寻找下一条请求的到达时间
+    fgets(buffer, 200, ssd->tracefile);    //다음 요청의 도착 시간 찾기
     sscanf(buffer,"%lld %d %d %d %d",&time_t,&device,&lsn,&size,&ope);
     ssd->next_request_time=time_t;
     fseek(ssd->tracefile,filepoint,0);
@@ -285,15 +293,15 @@ int get_requests(struct ssd_info *ssd)
 }
 
 /**********************************************************************************************************************************************
- *首先buffer是个写buffer，就是为写请求服务的，因为读flash的时间tR为20us，写flash的时间tprog为200us，所以为写服务更能节省时间
- *  读操作：如果命中了buffer，从buffer读，不占用channel的I/O总线，没有命中buffer，从flash读，占用channel的I/O总线，但是不进buffer了
- *  写操作：首先request分成sub_request子请求，如果是动态分配，sub_request挂到ssd->sub_request上，因为不知道要先挂到哪个channel的sub_request上
- *          如果是静态分配则sub_request挂到channel的sub_request链上,同时不管动态分配还是静态分配sub_request都要挂到request的sub_request链上
- *		   因为每处理完一个request，都要在traceoutput文件中输出关于这个request的信息。处理完一个sub_request,就将其从channel的sub_request链
- *		   或ssd的sub_request链上摘除，但是在traceoutput文件输出一条后再清空request的sub_request链。
- *		   sub_request命中buffer则在buffer里面写就行了，并且将该sub_page提到buffer链头(LRU)，若没有命中且buffer满，则先将buffer链尾的sub_request
- *		   写入flash(这会产生一个sub_request写请求，挂到这个请求request的sub_request链上，同时视动态分配还是静态分配挂到channel或ssd的
- *		   sub_request链上),在将要写的sub_page写入buffer链头
+ *먼저, 버퍼는 쓰기 요청을 처리하기 위한 쓰기 버퍼인데, 플래시를 읽는 시간 tR이 20us이고 플래시를 쓰는 시간이 tprog인 200us이기 때문에 쓰기 요청을 처리하는 시간을 절약할 수 있습니다. 쓰기 서비스.
+ * 읽기 동작: 버퍼가 히트하면 버퍼에서 읽고, 버퍼가 히트하지 않으면 채널의 I/O 버스를 점유하지 말고, 플래시에서 읽고, 채널의 I/O 버스를 점유하지만 버퍼에 들어가지 마십시오.
+ * 쓰기 작업: 먼저 요청을 sub_request 하위 요청으로 나눕니다.동적으로 할당된 경우 sub_request는 ssd->sub_request에 중단됩니다.
+ *          정적으로 할당된 경우 sub_request는 채널의 sub_request 체인에 연결되며, sub_request가 동적으로 할당되는지 정적으로 할당되는지 여부에 관계없이 요청의 sub_request 체인에 연결되어야 합니다.
+ *          요청이 처리될 때마다 요청에 대한 정보가 traceoutput 파일에 출력되어야 하기 때문입니다. sub_request를 처리한 후 채널의 sub_request 체인에서 제거합니다.
+ *          또는 ssd의 sub_request 체인을 제거하지만 traceoutput 파일이 하나를 출력한 후 요청의 sub_request 체인을 지웁니다.
+ *          sub_request가 버퍼에 적중하면 버퍼에 쓰기만 하고 sub_page를 버퍼 체인 헤드(LRU)에 참조하게 하고, 적중하지 않고 버퍼가 가득 차면 버퍼 체인 테일의 sub_request가 먼저
+ *          플래시에 쓰기(이렇게 하면 이 요청 요청의 sub_request 체인에 연결될 sub_request 쓰기 요청이 생성되고 동적으로 할당되는지 아니면 정적으로 할당되는지 여부에 따라 채널 또는 ssd에 연결됩니다.
+ *          sub_request chain), 버퍼 체인 헤드에 쓸 sub_page 쓰기
  ***********************************************************************************************************************************************/
 struct ssd_info *buffer_management(struct ssd_info *ssd)
 {   
@@ -324,8 +332,8 @@ struct ssd_info *buffer_management(struct ssd_info *ssd)
         while(lpn<=last_lpn)      		
         {
             /************************************************************************************************
-             *need_distb_flag表示是否需要执行distribution函数，1表示需要执行，buffer中没有，0表示不需要执行
-             *即1表示需要分发，0表示不需要分发，对应点初始全部赋为1
+             *need_distb_flag는 분배 함수가 실행되어야 하는지 여부를 나타내며, 1은 버퍼가 아닌 실행되어야 함을 나타내며, 0은 실행할 필요가 없음을 나타냅니다.
+             *즉, 1은 분배가 필요함을 의미하고 0은 분배가 필요하지 않음을 의미하며 해당하는 모든 포인트가 초기에 1로 할당됨
              *************************************************************************************************/
             need_distb_flag=full_page;   
             key.group=lpn;
@@ -347,7 +355,7 @@ struct ssd_info *buffer_management(struct ssd_info *ssd)
                 }
 
                 if(flag==1)				
-                {	//如果该buffer节点不在buffer的队首，需要将这个节点提到队首，实现了LRU算法，这个是一个双向队列。		       		
+                {	//버퍼 노드가 버퍼의 큐 헤드에 없으면 해당 노드를 큐의 헤드로 참조해야 하며 LRU 알고리즘을 구현하는 양방향 큐입니다.	       		
                     if(ssd->dram->buffer->buffer_head!=buffer_node)     
                     {		
                         if(ssd->dram->buffer->buffer_tail==buffer_node)								
@@ -418,8 +426,8 @@ struct ssd_info *buffer_management(struct ssd_info *ssd)
     }
 
     /*************************************************************
-     *如果请求已经被全部由buffer服务，该请求可以被直接响应，输出结果
-     *这里假设dram的服务时间为1000ns
+     *요청이 버퍼에 의해 완전히 서비스된 경우 요청에 직접 응답할 수 있으며 결과가 출력됩니다.
+     *여기서는 dram의 서비스 시간을 1000ns로 가정합니다.
      **************************************************************/
     if((complete_flag == 1)&&(new_request->subs==NULL))               
     {
@@ -431,7 +439,7 @@ struct ssd_info *buffer_management(struct ssd_info *ssd)
 }
 
 /*****************************
- *lpn向ppn的转换
+ *lpn에서 ppn으로 변환
  ******************************/
 unsigned int lpn2ppn(struct ssd_info *ssd,unsigned int lsn)
 {
@@ -446,9 +454,9 @@ unsigned int lpn2ppn(struct ssd_info *ssd,unsigned int lsn)
 }
 
 /**********************************************************************************
- *读请求分配子请求函数，这里只处理读请求，写请求已经在buffer_management()函数中处理了
- *根据请求队列和buffer命中的检查，将每个请求分解成子请求，将子请求队列挂在channel上，
- *不同的channel有自己的子请求队列
+ *읽기 요청 할당 하위 요청 기능, 여기서 읽기 요청만 처리, 쓰기 요청은 buffer_management() 함수에서 처리됨
+ *요청 큐 및 버퍼 히트 확인에 따라 각 요청은 하위 요청으로 분해되고, 하위 요청 큐는 채널에 매달리며,
+ *다른 채널에는 자체 하위 요청 대기열이 있습니다.
  **********************************************************************************/
 
 struct ssd_info *distribute(struct ssd_info *ssd) 
@@ -478,7 +486,7 @@ struct ssd_info *distribute(struct ssd_info *ssd)
     {
         if(req->distri_flag == 0)
         {
-            //如果还有一些读请求需要处理
+            //아직 처리할 읽기 요청이 있는 경우
             if(req->complete_lsn_count != ssd->request_tail->size)
             {		
                 first_lsn = req->lsn;				
@@ -491,10 +499,10 @@ struct ssd_info *distribute(struct ssd_info *ssd)
                 while(i >= 0)
                 {	
                     /*************************************************************************************
-                     *一个32位的整型数据的每一位代表一个子页，32/ssd->parameter->subpage_page就表示有多少页，
-                     *这里的每一页的状态都存放在了 req->need_distr_flag中，也就是complt中，通过比较complt的
-                     *每一项与full_page，就可以知道，这一页是否处理完成。如果没处理完成则通过creat_sub_request
-                     函数创建子请求。
+                     *32비트 정수 데이터의 각 비트는 서브페이지를 나타내며, 32/ssd->parameter->subpage_page는 페이지가 몇 개인지,
+                     *여기에 있는 각 페이지의 상태는 req->need_distr_flag에 저장됩니다. 즉, complt의 비교를 통해 complt에 저장됩니다.
+                     *full_page가 있는 각 항목은 이 페이지가 처리되었는지 여부를 알 수 있습니다. 처리되지 않은 경우 creat_sub_request 전달
+                     *이 함수는 하위 요청을 생성합니다.
                      *************************************************************************************/
                     for(j=0; j<32/ssd->parameter->subpage_page; j++)
                     {	
@@ -530,8 +538,8 @@ struct ssd_info *distribute(struct ssd_info *ssd)
 
 
 /**********************************************************************
- *trace_output()函数是在每一条请求的所有子请求经过process()函数处理完后，
- *打印输出相关的运行结果到outputfile文件中，这里的结果主要是运行的时间
+ *trace_output() 함수는 각 요청의 모든 하위 요청이 process() 함수에 의해 처리된 후,
+ *해당 실행 결과를 출력 파일 파일에 인쇄합니다. 여기서 결과는 주로 실행 시간입니다.
  **********************************************************************/
 void trace_output(struct ssd_info* ssd){
     int flag = 1;	
@@ -749,10 +757,10 @@ void trace_output(struct ssd_info* ssd){
 
 
 /*******************************************************************************
- *statistic_output()函数主要是输出处理完一条请求后的相关处理信息。
- *1，计算出每个plane的擦除次数即plane_erase和总的擦除次数即erase
- *2，打印min_lsn，max_lsn，read_count，program_count等统计信息到文件outputfile中。
- *3，打印相同的信息到文件statisticfile中
+ *statistic_output() 함수는 주로 요청 처리 후 관련 처리 정보를 출력한다.
+ *1, 각 평면의 지우기 시간, 즉 plane_erase와 총 지우기 시간, 즉 지우기를 계산합니다.
+ *2, min_lsn, max_lsn, read_count, program_count 및 기타 통계 정보를 파일 outputfile에 인쇄합니다.
+ *3, 같은 정보를 statisticfile 파일에 출력
  *******************************************************************************/
 void statistic_output(struct ssd_info *ssd)
 {
@@ -864,7 +872,7 @@ void statistic_output(struct ssd_info *ssd)
 
 
 /***********************************************************************************
- *根据每一页的状态计算出每一需要处理的子页的数目，也就是一个子请求需要处理的子页的页数
+ * 각 페이지의 상태에 따라 처리할 하위 페이지의 수, 즉 하위 요청에 의해 처리될 하위 페이지의 수를 계산합니다.
  ************************************************************************************/
 unsigned int size(unsigned int stored)
 {
@@ -886,10 +894,10 @@ unsigned int size(unsigned int stored)
 
 
 /*********************************************************
- *transfer_size()函数的作用就是计算出子请求的需要处理的size
- *函数中单独处理了first_lpn，last_lpn这两个特别情况，因为这
- *两种情况下很有可能不是处理一整页而是处理一页的一部分，因
- *为lsn有可能不是一页的第一个子页。
+ *transfer_size() 함수의 함수는 처리해야 하는 하위 요청의 크기를 계산하는 것입니다.
+ *first_lpn 및 last_lpn의 두 가지 특별한 경우는 함수에서 별도로 처리됩니다.
+ *두 경우 모두 전체 페이지가 아니라 페이지의 일부가 처리될 가능성이 매우 높습니다.
+ *lsn의 경우 페이지의 첫 번째 하위 페이지가 없을 수 있습니다.
  *********************************************************/
 unsigned int transfer_size(struct ssd_info *ssd,int need_distribute,unsigned int lpn,struct request *req)
 {
@@ -919,12 +927,12 @@ unsigned int transfer_size(struct ssd_info *ssd,int need_distribute,unsigned int
 
 
 /**********************************************************************************************************  
- *int64_t find_nearest_event(struct ssd_info *ssd)       
- *寻找所有子请求的最早到达的下个状态时间,首先看请求的下一个状态时间，如果请求的下个状态时间小于等于当前时间，
- *说明请求被阻塞，需要查看channel或者对应die的下一状态时间。Int64是有符号 64 位整数数据类型，值类型表示值介于
- *-2^63 ( -9,223,372,036,854,775,808)到2^63-1(+9,223,372,036,854,775,807 )之间的整数。存储空间占 8 字节。
- *channel,die是事件向前推进的关键因素，三种情况可以使事件继续向前推进，channel，die分别回到idle状态，die中的
- *读数据准备好了
+ *int64_t find_nearest_event(구조체 ssd_info *ssd)
+ *모든 하위 요청 중 가장 빨리 도착한 다음 상태 시간을 찾고, 요청의 다음 상태 시간이 현재 시간보다 작거나 같으면 먼저 요청의 다음 상태 시간을 확인합니다.
+ *요청이 차단되었음을 나타내며 해당 채널 또는 해당 다이의 다음 상태 시간을 확인해야 합니다. Int64는 부호 있는 64비트 정수 데이터 유형이며 값 유형은 다음 사이의 값을 나타냅니다.
+ *-2^63( -9,223,372,036,854,775,808 )과 2^63-1(+9,223,372,036,854,775,807 ) 사이의 정수입니다. 저장 공간은 8바이트를 차지합니다.
+ *채널과 다이는 이벤트 진행의 핵심 요소입니다. 세 가지 상황이 이벤트를 계속 진행하게 할 수 있습니다. 채널과 다이는 각각 유휴 상태로 돌아갑니다.
+ * 데이터 읽기 준비
  ***********************************************************************************************************/
 int64_t find_nearest_event(struct ssd_info *ssd) 
 {
@@ -949,11 +957,11 @@ int64_t find_nearest_event(struct ssd_info *ssd)
     } 
 
     /*****************************************************************************************************
-     *time为所有 A.下一状态为CHANNEL_IDLE且下一状态预计时间大于ssd当前时间的CHANNEL的下一状态预计时间
-     *           B.下一状态为CHIP_IDLE且下一状态预计时间大于ssd当前时间的DIE的下一状态预计时间
-     *		     C.下一状态为CHIP_DATA_TRANSFER且下一状态预计时间大于ssd当前时间的DIE的下一状态预计时间
-     *CHIP_DATA_TRANSFER读准备好状态，数据已从介质传到了register，下一状态是从register传往buffer中的最小值 
-     *注意可能都没有满足要求的time，这时time返回0x7fffffffffffffff 。
+     *시간은 이하와 같다. A. 다음 상태는 CHANNEL_IDLE이고 다음 상태의 예상 시간은 ssd의 현재 시간 CHANNEL 다음 상태의 예상 시간보다 큽니다.
+     *                  B. 다음 상태가 CHIP_IDLE이고 다음 상태 예상 시간이 ssd의 현재 시간보다 큰 DIE의 다음 상태 예상 시간
+     *                  C. 다음 상태가 CHIP_DATA_TRANSFER이고 다음 상태 예상 시간이 ssd의 현재 시간보다 큰 DIE의 다음 상태 예상 시간
+     *CHIP_DATA_TRANSFER 읽기 준비 상태, 데이터가 매체에서 레지스터로 전송됨, 다음 상태는 레지스터에서 버퍼로 전송된 최소값
+     *요구 사항을 충족하는 시간이 없을 수 있으며 시간은 0x7ffffffffffffffff를 반환합니다.
      *****************************************************************************************************/
     time=(time1>time2)?time2:time1;
     return time;
@@ -1021,8 +1029,8 @@ void free_all_node(struct ssd_info *ssd)
 
 
 /*****************************************************************************
- *make_aged()函数的作用就死模拟真实的用过一段时间的ssd，
- *那么这个ssd的相应的参数就要改变，所以这个函数实质上就是对ssd中各个参数的赋值。
+ *make_aged() 함수의 기능은 일정 기간 동안 사용된 실제 SSD를 시뮬레이션하는 것입니다.
+ *그러면 ssd의 해당 매개변수가 변경되므로 이 기능은 본질적으로 ssd의 각 매개변수를 할당하는 것입니다.
  ******************************************************************************/
 struct ssd_info *make_aged(struct ssd_info *ssd)
 {
@@ -1031,7 +1039,7 @@ struct ssd_info *make_aged(struct ssd_info *ssd)
 
     if (ssd->parameter->aged==1)
     {
-        //threshold表示一个plane中有多少页需要提前置为失效
+        //임계값(threshould)은 plane에서 미리 무효화해야 하는 페이지 수를 나타냅니다.
         threshould=(int)(ssd->parameter->block_plane*ssd->parameter->page_block*ssd->parameter->aged_ratio);  
         for (i=0;i<ssd->parameter->channel_number;i++)
             for (j=0;j<ssd->parameter->chip_channel[i];j++)
@@ -1047,9 +1055,9 @@ struct ssd_info *make_aged(struct ssd_info *ssd)
                             }
                             for (n=0;n<(ssd->parameter->page_block*ssd->parameter->aged_ratio+1);n++)
                             {  
-                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].valid_state=0;        //表示某一页失效，同时标记valid和free状态都为0
-                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].free_state=0;         //表示某一页失效，同时标记valid和free状态都为0
-                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].lpn=0;  //把valid_state free_state lpn都置为0表示页失效，检测的时候三项都检测，单独lpn=0可以是有效页
+                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].valid_state=0;        //페이지가 유효하지 않으며 valid 및 free 상태가 모두 0으로 표시됨을 나타냅니다.
+                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].free_state=0;         //페이지가 유효하지 않으며 valid 및 free 상태가 모두 0으로 표시됨을 나타냅니다.
+                                ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].page_head[n].lpn=0;  //페이지가 유효하지 않음을 나타내려면 valid_state free_state lpn을 0으로 설정합니다. 테스트할 때 세 항목이 모두 감지됩니다. Lpn=0만으로도 유효한 페이지가 될 수 있습니다.
                                 ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].free_page_num--;
                                 ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].invalid_page_num++;
                                 ssd->channel_head[i].chip_head[j].die_head[k].plane_head[l].blk_head[m].last_write_page++;
@@ -1072,8 +1080,8 @@ struct ssd_info *make_aged(struct ssd_info *ssd)
 
 
 /*********************************************************************************************
- *no_buffer_distribute()函数是处理当ssd没有dram的时候，
- *这是读写请求就不必再需要在buffer里面寻找，直接利用creat_sub_request()函数创建子请求，再处理。
+ *no_buffer_distribute() 함수는 ssd에 dram이 없을 때 처리하는 것입니다.
+ *읽기 및 쓰기 요청이므로 버퍼에서 검색할 필요가 없으며 creat_sub_request() 함수를 직접 사용하여 하위 요청을 생성한 후 처리합니다.
  *********************************************************************************************/
 struct ssd_info *no_buffer_distribute(struct ssd_info *ssd)
 {
